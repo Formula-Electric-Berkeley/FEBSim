@@ -1,0 +1,23 @@
+_______                    ___    ________________  ________________________________
+__  __ \_____________________ |  / /__  ____/__  / / /___  _/_  ____/__  /___  ____/
+_  / / /__  __ \  _ \_  __ \_ | / /__  __/  __  /_/ / __  / _  /    __  / __  __/   
+/ /_/ /__  /_/ /  __/  / / /_ |/ / _  /___  _  __  / __/ /  / /___  _  /___  /___   
+\____/ _  .___/\___//_/ /_/_____/  /_____/  /_/ /_/  /___/  \____/  /_____/_____/   
+       /_/                                                                          
+====================================================================================
+FEB_underbody_wings.xlsx
+File read successfully
+====================================================================================
+Name: FEB_underbody_wings
+Type: Open Wheel
+Date: 12/09/2023
+Time: 15:47:04
+====================================================================================
+Vehicle generation started.
+Braking model generated successfully.
+Driveline model generated successfully.
+Shift points calculated successfully.
+Forces calculated successfully.
+GGV map generated successfully.
+Plots created and saved.
+Vehicle generated successfully.
