@@ -159,7 +159,9 @@ power_curve = motor_speeds*motor_torques*2*pi/60 # W
 wheel_speed = motor_speeds/ratio_primary/ratio_gearbox/ratio_final
 vehicle_speed = wheel_speed*2*pi/60*tyre_radius #The theoretical speed of the vehicle at various torques
 wheel_torque = motor_torques*ratio_primary*ratio_gearbox*ratio_final*n_primary*n_gearbox*n_final
-#We push inefficiency of the gears into the torque (is this a good assumption? TODO)
+#TODO We push inefficiency of the gears into the torque (is this a good assumption?)
+#Wheel torque = motor torque * gear ratio
+#Look here for energy calcs
 
 # minimum and maximum vehicle speeds
 v_min = min(vehicle_speed)
@@ -172,18 +174,17 @@ vehicle_speed_fine = np.linspace(v_min,v_max, (int) ((v_max-v_min)/dv) )
 # engine tractive force
 engine_force =  wheel_torque/tyre_radius
 fx_engine = np.interp(vehicle_speed_fine, vehicle_speed, engine_force) #interpolate to our finer mesh
-
 vehicle_speed = vehicle_speed_fine #to fix any future dependencies
 
+
 # adding values for 0 speed to vectors for interpolation purposes at low speeds
-#TODO add back if needed; don't add anything until we see the reason
-#vehicle_speed = [0;vehicle_speed] ;
-#gear = [gear(1);gear] ;
-#fx_engine = [fx_engine(1);fx_engine] ;
+vehicle_speed = np.insert(vehicle_speed, 0, 0)
+fx_engine = np.insert(fx_engine, 0, fx_engine[0])
 
 # final vectors
+
 # engine speed
-engine_speed = ratio_final*ratio_gearbox*ratio_primary*vehicle_speed_fine/tyre_radius*60/(2*pi)
+engine_speed = ratio_final*ratio_gearbox*ratio_primary*vehicle_speed/tyre_radius*60/(2*pi)
 # wheel torque
 wheel_torque = fx_engine*tyre_radius
 # engine torque
@@ -279,7 +280,7 @@ for i in range(len(v)):
     ax_tyre_max_dec = -1/M*(mux+dmx*(Nx-(Wz-Aero_Df)/4))*(Wz-Aero_Df) 
     # getting power limit from engine
     
-    ax_power_limit = 1/M*np.interp(v[i], vehicle_speed_fine, fx_engine*factor_power)
+    ax_power_limit = 1/M*np.interp(v[i], vehicle_speed, fx_engine*factor_power)
     ax_power_limit = ax_power_limit*np.ones(N)
     # lat acc vector
     ay = ay_max*np.cos(np.linspace(0,2*pi,N))
@@ -307,5 +308,18 @@ def plotGGV():
     
     plt.show()
     
-#plotGGV()
+def plotMotorCurve(): 
+    ax = plt.axes()
+    
+    ax.scatter(vehicle_speed, wheel_torque)
+    ax.set_xlabel('Vehicle Speed (m/s)')
+    ax.set_ylabel('Wheel Torque (Nm)')
+    
+    #ax.scatter(motor_speeds, motor_torques)
+    #ax.set_xlabel('Motor Speed (rpm)')
+    #ax.set_ylabel('Motor Torque (Nm)')
+    
+    plt.show()
+
+plotMotorCurve()
         

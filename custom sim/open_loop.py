@@ -3,8 +3,9 @@ This will be the main file
 '''
 import numpy as np
 import lap_utils
-import scipy.io as spy
 from scipy.signal import find_peaks
+from scipy.interpolate import interp1d
+
 import matplotlib.pyplot as plt
 
 #Import track and vehicle files like OpenLap
@@ -92,7 +93,7 @@ def simulate():
                 i_rest = lap_utils.other_points(i, N)
                 # Getting apex index
                 j = int(apex[i])
-                print("Here j = {}".format(j))
+                #print("Here j = {}".format(j))
                 # Saving speed, latacc, and driver inputs from presolved apex
                 v[j, i, k] = v_apex[i]
                 
@@ -114,7 +115,7 @@ def simulate():
                 while True:
                     # Calculating speed, accelerations, and driver inputs from the vehicle model
                     v[j_next, i, k], ax[j, i, k], ay[j, i, k], tps[j, k], bps[j, k], overshoot = lap_utils.vehicle_model_comb(veh, tr, v[j, i, k], v_max[j_next], j, mode)
-                    print("j = {} | | v = {}".format(j, v[j_next, i, k]))
+                    #print("j = {} | | v = {}".format(j, v[j_next, i, k]))
                     # Checking for limit
                     if overshoot:
                         #print("Overshot")
@@ -209,6 +210,43 @@ def simulate():
     laptime = time[-1]
     
     print("Laptime is {}".format(laptime))
+    
+    
+    
+    #print(TPS)
+
+    #Energy Metrics    
+    # Interpolate wheel torque
+    torque_func = interp1d(veh.vehicle_speed, veh.wheel_torque,kind='linear', fill_value='extrapolate')
+    #print(V)
+    wheel_torque = TPS * torque_func(V)
+    motor_torque = wheel_torque / (veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final*veh.n_primary*veh.n_gearbox*veh.n_final)
+    
+    wheel_speed = V/veh.tyre_radius * 60/(2*np.pi)
+    motor_speed = wheel_speed*veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final
+
+    
+    motor_power = motor_torque * motor_speed #in W
+    
+    #work = wheel_torque / veh.tyre_radius * tr.dx #work = force*distance
+    
+    motor_energy = np.multiply(motor_power, dt) #about 11738177 J or 3.2606047222 kWh
+    #print(work)
+    #print(len(wheel_torque))
+    #print(len(tr.dx))
+    
+    #total_work = np.trapz(wheel_torque / veh.tyre_radius, x = tr.x) #about 1103354 J or 0.3 kWh
+    #print(motor_power)
+
+    # Calculate fuel consumption
+    energy_cost = np.cumsum(motor_energy) 
+    
+    # Total fuel consumption
+    energy_cost_total = energy_cost[-1] #in J
+    in_kWh = energy_cost_total/(3.6*10**6)
+    
+    print("Energy cost is {:.3f} kWh".format(in_kWh)) 
+    print()
 
 
 
@@ -219,156 +257,3 @@ def test():
     print(v_max)
 
 simulate()
-
-
-def simulate2():
-    #Maximum speed trace
-    v_max = []
-    v_apex = []
-    
-    for i in range(tr.n):
-        v_max.append(lap_utils.vehicle_model_lat(veh,tr,i))
-    
-    
-    #Find local minima of v_max (maximum speed curve)
-    
-    apexes, _ = find_peaks(np.reciprocal(v_max)) #findpeaks finds the maxima, so we invert first (it has some issues with negative)
-    
-    for apex in apexes:
-        v_apex.append(v_max[apex]) #the local minima
-    
-    N = len(apexes)
-    
-    
-    '''
-    Main Simulation Loop:
-    
-        For each apex:
-            Accelerate the vehicle to every other mesh point forward in time
-            Decelerate vehicle to every other mesh point backward in time
-            
-            This will give two segments/arrays (accel and decel) for each apex point
-        
-        The final velocity solution is the minimum velocity of all of these segments
-    '''
-    
-    #Accelerate and Decelerate from each Apex to find the v at each mesh point:
-    
-    #1st dimension is the mesh point index
-    #2nd dimension is the apex index (which apex we solved this set of velocities for)
-    #3rd dimension indicates acceleration or deceleration
-    
-    v = np.inf*np.ones(shape=(tr.n, N, 2)) #we set to a large number because final v is the minimum of value of each segment
-    
-    ax = np.zeros(shape=(tr.n, N, 2))
-    ay = np.zeros(shape=(tr.n, N, 2))
-    tps = np.zeros(shape=(tr.n, N, 2)) #throttle pressure -> talk with e-powertrain; this is how we calculate Energy consumption
-    bps = np.zeros(shape=(tr.n, N, 2))
-    
-    flag = np.zeros((tr.n,2)) # optimization flag; if true, speed has been correctly evaluated for that mesh point
-    
-    for k in range(2):
-        mode = 2*k-1 #mode is -1 for decel or 1 for acceleration
-        
-        for i in range(N): #for each apex
-            j = apexes[i]
-            
-            v[j][i][k] = v_apex[i]            #initial velocity is just the ith apex velocity 
-            #tps(j,:) = tps_apex(i)*ones(1,N) ;
-            #bps(j,:) = bps_apex(i)*ones(1,N) ;
-            flag[j][k] = 1 #1 = True, 0 = false
-    
-            j_next, j = lap_utils.next_point(j,tr.n-1,mode)
-            
-            
-            while True: 
-                
-                v[j_next,i,k], ax[j,i,k], ay[j,i,k], tps[j,k], bps[j,k], overshoot = lap_utils.vehicle_model_comb(veh,tr,v[j,i,k],v_max[j_next],j,mode)
-                
-                # if we have solved this point in previous apex iterations
-                if (flag[j,k] == 1):
-                    # and if ANY of the previous solutions yield a smaller velocity, 
-                    vj = [] #other solutions at jmax
-                    for h in range(2):
-                        for l in range(N):
-                            if not(h==k and l==i):
-                                vj.append(v[j_next,l,h])
-                                
-                    
-                    if (v[j_next,i,k] > np.max(vj)):
-                        break # we don't need to keep solving this direction (i.e. accel or decel) from this apex
-        
-                # updating flag; we have solved for this point
-                flag[j][k] = 1
-                
-                # moving to next point index (increments j and j_next, mod tr.n)
-                j_next, j = lap_utils.next_point(j,tr.n-1,mode)
-    
-                if j==apexes[i]: #repeat until we get back to the initial apex point
-                    break
-        
-        
-        
-        '''
-        Purpose of flag:
-            Accelerate and decelerate from each apex point i to all other mesh points
-            Solve for each mesh point j
-                If we have already solved for (j,k) and found a smaller maximum speed, 
-                it's not worth it to solve for other mesh points from this apex point, as 
-                we can be sure that this will be the case for all other mesh points as calculated from i
-                So we skip to the next apex point
-    
-        '''
-        
-    
-    
-    print("here")
-    print(v[0, :, 0])
-    # preallocation for results
-    V = np.zeros(tr.n)
-    AX = np.zeros(tr.n)
-    AY = np.zeros(tr.n)
-    TPS = np.zeros(tr.n)
-    BPS = np.zeros(tr.n)
-    
-    # solution selection
-    for i in range(tr.n):
-        IDX = v.shape[1]
-        #min_values = np.min([v[i, :, 0], v[i, :, 1]], axis=0)
-        #idx = np.argmin(min_values)
-        #V[i] = min_values[idx]
-        min_values = np.min(v[i, :, :], axis=1)
-        idx = np.argmin(min_values)
-    
-        V[i] = min_values[idx]
-    
-        if idx <= IDX:  # solved in acceleration
-            AX[i] = ax[i, idx, 0]
-            AY[i] = ay[i, idx, 0]
-            TPS[i] = tps[i, 0]
-            BPS[i] = bps[i, 0]
-        else:  # solved in deceleration
-            AX[i] = ax[i, idx - IDX, 1]
-            AY[i] = ay[i, idx - IDX, 1]
-            TPS[i] = tps[i, 1]
-            BPS[i] = bps[i, 1]
-        
-        
-        
-
-
-
-
-    # laptime calculation    
-    dt = np.divide(tr.dx, V)
-    time = np.cumsum(V)
-    
-    max_sector = int(np.max(tr.sector))
-    sector_time = np.zeros(max_sector)
-    
-    for i in range(1, max_sector + 1):
-        sector_time[i - 1] = np.max(time[tr.sector == i]) - np.min(time[tr.sector == i])
-    
-    laptime = time[-1]
-    
-    print("Laptime is {}".format(laptime))
