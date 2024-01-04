@@ -48,7 +48,7 @@ tic
 %% Filenames
 
 trackfile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2021 End_Closed_Forward.mat' ;
-vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat' ;
+vehiclefile = ['OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat'] ;
 
 %% Loading circuit
 

@@ -47,7 +47,7 @@ total_timer = tic ;
 %% Loading vehicle
 
 % filename
-vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat' ;
+vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_120A_Low_Drag_Open Wheel.mat' ;
 
 %% Simulation settings
 
