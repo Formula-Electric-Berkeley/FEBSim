@@ -38,7 +38,7 @@ fclose('all') ;
 
 %% Vehicle file selection
 
-filename = 'SN3_120A_Low_Drag.xlsx' ;
+filename = 'RIT_2023.xlsx' ;
 
 %% Reading vehicle file
 
