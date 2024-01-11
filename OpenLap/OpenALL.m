@@ -24,7 +24,7 @@ vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat' ;
 ptsfile  = 'SN3_Points_Reference.xlsx';
 
 % Do you wish to sweep values? If false, given vehicle values will be used.
-sweepBool = false;
+sweepBool = true;
 
 % Variable to sweep. Run OpenLAP and see veh struct for vars available. Only
 % vars that are a single value currently work (no motor curves).
