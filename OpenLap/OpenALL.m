@@ -21,7 +21,7 @@ numLaps = 21;
 endurancefile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2021 End_Closed_Forward.mat' ;
 autoXfile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2022_Open_Forward.mat' ;
 vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat' ;
-ptsfile  = 'SN3_Points_Reference.xlsx';
+ptsfile  = 'SN3_Points_Reference.xlsx'; 
 
 % Do you wish to sweep values? If false, given vehicle values will be used.
 sweepBool = true;
@@ -31,17 +31,17 @@ sweepBool = true;
 sweepVar = "Cl";
 
 % Values to sweep var with
-vals2Sweep = [-1:-1:-4];
+vals2Sweep = [-1:-0.5:-4];
 
 % Do you want to sweep a second var? Set true if yes
-sweep2 = false;
+sweep2 = true;
 
 % Second var to sweep
 sweepVar2 = "Cd";
 
 % Values to sweep second var. Use linspace and fill out first two values 
 % (need same length as vals2Sweep
-vals2Sweep2 = linspace(-1,-2,length(vals2Sweep));
+vals2Sweep2 = [-1:-0.25:-2];
 
 %% Loading variables
 
@@ -132,6 +132,7 @@ if sweepBool
             
             %Plot time and erergy versus swept value
             figure(1);
+            set(gcf, 'Position',  [100, 100, 850, 1000])
             subplot(3,2,1)
             plot(vals2Sweep, tVec_end, "O-");
             title("Endurance Lap Time Vs. Swept " + sweepVar)
@@ -160,8 +161,11 @@ if sweepBool
             ylabel("Acc Time (s)")
             grid on;
             
+            sgtitle("Times and Energies for: " + veh.name)
+
             %Point graphs
             figure(2);
+            set(gcf, 'Position',  [1000, 100, 850, 1000])
             subplot(4,2,1)
             plot(vals2Sweep, pts(:,1), "O-");
             title("Endurance Pts Vs. Swept " + sweepVar)
@@ -203,6 +207,8 @@ if sweepBool
             xlabel(sweepVar)
             ylabel("All Pts")
             grid on;
+
+            sgtitle("Points Plots for: " + veh.name)
         else
             %Sweeping 2 variables
             
@@ -242,88 +248,101 @@ if sweepBool
             end
            
             %Plot time and erergy versus swept value
-            figure;
+            figure(1);
+            set(gcf, 'Position',  [100, 100, 850, 1000])
             subplot(3,2,1)
-            surf(vals2Sweep, vals2Sweep2, tVec_end);
-            title("Endurance Lap Time Vs. Swept " + sweepVar)
+            surf(vals2Sweep, vals2Sweep2, tVec_end');
+            title("Endurance Lap Time Vs. Swept " + sweepVar + " and " + sweepVar2)
             xlabel(sweepVar)
             ylabel(sweepVar2)
             zlabel("Lap Time (s)")
             colorbar
             
             subplot(3,2,2)
-            surf(vals2Sweep2, vals2Sweep2, eVec_end);
-            title("Endurance Energy w/ Regen Vs. Swept " + sweepVar)
+            surf(vals2Sweep, vals2Sweep2, eVec_end');
+            title("Endurance Energy w/ Regen Vs. Swept " + sweepVar + " and " + sweepVar2)
             xlabel(sweepVar)
             ylabel(sweepVar2)
             zlabel("End Energy (kWh)")
             colorbar
 
             subplot(3,1,2)
-            surf(vals2Sweep, vals2Sweep2, tVec_autoX);
-            title("AutoX Lap Time Vs. Swept " + sweepVar)
+            surf(vals2Sweep, vals2Sweep2, tVec_autoX');
+            title("AutoX Lap Time Vs. Swept " + sweepVar + " and " + sweepVar2)
             xlabel(sweepVar)
             ylabel(sweepVar2)
             zlabel("Lap Time (s)")
             colorbar
 
             subplot(3,1,3)
-            surf(vals2Sweep, vals2Sweep2, tVec_acc);
-            title("Acceleration  Time Vs. Swept " + sweepVar)
+            surf(vals2Sweep, vals2Sweep2, tVec_acc');
+            title("Acceleration  Time Vs. Swept " + sweepVar + " and " + sweepVar2)
             xlabel(sweepVar)
             ylabel(sweepVar2)
             zlabel("Acc Time (s)")
             colorbar
 
+            sgtitle("Times and Energies for: " + veh.name)
+
             %Plot points
             figure(2);
+            set(gcf, 'Position',  [1000, 100, 850, 1000])
             subplot(4,2,1)
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,1));
-            title("Endurance Pts Vs. Swept " + sweepVar)
+            surf(vals2Sweep, vals2Sweep2, pts(:,:,1)');
+            title("Endurance Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
             xlabel(sweepVar)
             ylabel(sweepVar2)
             zlabel("End Pts")
             grid on;
+            colorbar
 
             subplot(4,2,3)
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,2));
-            title("AutoX Pts Vs. Swept " + sweepVar)
+            surf(vals2Sweep, vals2Sweep2, pts(:,:,2)');
+            title("AutoX Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
             xlabel(sweepVar)
             ylabel(sweepVar2)
             zlabel("AutoX Pts")
             grid on;
+            colorbar
 
             subplot(4,2,5)
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,3));
-            title("Acc Pts Vs. Swept " + sweepVar)
+            surf(vals2Sweep, vals2Sweep2, pts(:,:,3)');
+            title("Acc Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
             xlabel(sweepVar)
             ylabel(sweepVar2)
             zlabel("Acc Pts")
             grid on;
+            colorbar
 
             subplot(4,2,7)
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,4));
-            title("Eff Pts Vs. Swept " + sweepVar)
+            surf(vals2Sweep, vals2Sweep2, pts(:,:,4)');
+            title("Eff Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
             xlabel(sweepVar)
             ylabel(sweepVar2)
             zlabel("Eff Pts")
             grid on;
+            colorbar
 
             subplot(4,2,[2;4])
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,5));
-            title("End + AutoX + Acc Pts Vs. Swept " + sweepVar)
+            surf(vals2Sweep, vals2Sweep2, pts(:,:,5)');
+            title("End + AutoX + Acc Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
             xlabel(sweepVar)
             ylabel(sweepVar2)
             zlabel("Dynamic Pts")
             grid on;
+            colorbar
 
             subplot(4,2,[6;8])
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,6));
-            title("End + AutoX + Acc + Eff Pts Vs. Swept " + sweepVar)
+            surf(vals2Sweep, vals2Sweep2, pts(:,:,6)');
+            title("End + AutoX + Acc + Eff Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
             xlabel(sweepVar)
             ylabel(sweepVar2)
             zlabel("All Pts")
             grid on;
+            colorbar
+
+            sgtitle("Points Plots for: " + veh.name)
+
         end
     end
 else
