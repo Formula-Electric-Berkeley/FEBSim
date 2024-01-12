@@ -31,7 +31,7 @@ sweepBool = true;
 sweepVar = "ratio_final";
 
 % Values to sweep var with
-vals2Sweep = [3:0.1:4];
+vals2Sweep = [2:1:10];
 
 % Do you want to sweep a second var? Set true if yes
 sweep2 = false;
@@ -83,8 +83,6 @@ if sweepBool
 
         pts = ptsCalc(ptsRef, numLaps, tr_end, tr_autoX, accTime, e_end);
         
-        e_end = e_end*numLaps;
-
         %% Reporting results if single value
         display("Endurance Laptime: " + tr_end + " seconds")
         display("Endurance Energy with Regen: " + e_end + " kWh")
@@ -112,6 +110,8 @@ if sweepBool
             tVec_acc = zeros(length(vals2Sweep),1);
 
             pts  = zeros(length(vals2Sweep),6);
+
+            
             
             %Run sim for each sweep value and record time and energy
             for i = 1:length(vals2Sweep); 
@@ -130,8 +130,6 @@ if sweepBool
                 pts(i,:) = ptsCalc(ptsRef, numLaps, tVec_end(i), tVec_autoX(i), tVec_acc(i), eVec_end(i));
             end
             
-            eVec_end = eVec_end*numLaps;
-
             %Plot time and erergy versus swept value
             figure(1);
             set(gcf, 'Position',  [100, 100, 850, 1000])
@@ -249,8 +247,6 @@ if sweepBool
                 end
             end
            
-            eVec_end = eVec_end*numLaps;
-
             %Plot time and erergy versus swept value
             figure(1);
             set(gcf, 'Position',  [100, 100, 850, 1000])
@@ -363,8 +359,6 @@ else
 
     pts = ptsCalc(ptsRef, numLaps, tr_end, tr_autoX, accTime, e_end);
     
-    e_end = e_end*numLaps
-
     %% Reporting results if single value
     display("Endurance Laptime: " + tr_end + " seconds")
     display("Endurance Energy with Regen: " + e_end + " kWh")
@@ -1475,7 +1469,7 @@ function accTime = OpenDRAG(veh)
     %% 75m time
     
     %Find index and time at which front of car hits  75m
-    acc_75m_t = T(find(X > 75,1));
+    acc_75m_t = T(find(X > carlength,1));
     
     %Timer starts when car passes line so find time when back of car passes line
     carlength = 2.250; %(m)
