@@ -20,7 +20,7 @@ numLaps = 21;
 
 endurancefile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2021 End_Closed_Forward.mat' ;
 autoXfile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2022_Open_Forward.mat' ;
-vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat' ;
+vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_RIT_2023_Open Wheel.mat' ;
 ptsfile  = 'SN3_Points_Reference.xlsx'; 
 
 % Do you wish to sweep values? If false, given vehicle values will be used.
@@ -28,20 +28,20 @@ sweepBool = true;
 
 % Variable to sweep. Run OpenLAP and see veh struct for vars available. Only
 % vars that are a single value currently work (no motor curves).
-sweepVar = "ratio_final";
+sweepVar = "factor_drive";
 
 % Values to sweep var with
-vals2Sweep = [3:0.1:4];
+vals2Sweep = 1;
 
 % Do you want to sweep a second var? Set true if yes
-sweep2 = false;
+sweep2 = true;
 
 % Second var to sweep
-sweepVar2 = "Cd";
+sweepVar2 = "";
 
 % Values to sweep second var. Use linspace and fill out first two values 
 % (need same length as vals2Sweep
-vals2Sweep2 = [-1:-0.25:-2];
+vals2Sweep2 = -3.5;
 
 %% Loading variables
 
@@ -97,6 +97,8 @@ if sweepBool
         display("Efficiency points: " + pts(4))
         display("Total Dynamic Points: " + pts(5) + " out of 500 available points")
         display("Total Points: " + pts(6) + " out of 600 available points *NOTE EFFICIENCY SCORING NOT ACCURATE*")
+
+        display("Total Comp Points: " + (pts(6) + 270) + " out of 1000 available *ASSUMING 2023 FORECASTED RESULTS*")
     else 
         % If multiple values given
 
