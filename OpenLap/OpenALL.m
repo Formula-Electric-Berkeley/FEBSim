@@ -20,7 +20,7 @@ numLaps = 21;
 
 endurancefile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2021 End_Closed_Forward.mat' ;
 autoXfile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2022_Open_Forward.mat' ;
-vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_120A_Open Wheel.mat' ;
+vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat' ;
 ptsfile  = 'SN3_Points_Reference.xlsx';
 
 % Do you wish to sweep values? If false, given vehicle values will be used.
@@ -31,11 +31,7 @@ sweepBool = false;
 sweepVar = "factor_drive";
 
 % Values to sweep var with
-<<<<<<< HEAD
-vals2Sweep = [-0.5:-1:-4];
-=======
 vals2Sweep = 1;
->>>>>>> c7b4709c8d94fe1a0fad08f01b95acc90a5a8a90
 
 % Do you want to sweep a second var? Set true if yes
 sweep2 = true;
