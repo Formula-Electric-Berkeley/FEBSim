@@ -20,32 +20,28 @@ numLaps = 21;
 
 endurancefile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2021 End_Closed_Forward.mat' ;
 autoXfile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2022_Open_Forward.mat' ;
-vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_120A_Open Wheel.mat' ;
-ptsfile  = 'SN3_Points_Reference.xlsx';
+vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat' ;
+ptsfile  = 'SN3_Points_Reference.xlsx'; 
 
 % Do you wish to sweep values? If false, given vehicle values will be used.
-sweepBool = false;
+sweepBool = true;
 
 % Variable to sweep. Run OpenLAP and see veh struct for vars available. Only
 % vars that are a single value currently work (no motor curves).
-sweepVar = "factor_drive";
+sweepVar = "ratio_final";
 
 % Values to sweep var with
-<<<<<<< HEAD
-vals2Sweep = [-0.5:-1:-4];
-=======
-vals2Sweep = 1;
->>>>>>> c7b4709c8d94fe1a0fad08f01b95acc90a5a8a90
+vals2Sweep = [2:1:10];
 
 % Do you want to sweep a second var? Set true if yes
-sweep2 = true;
+sweep2 = false;
 
 % Second var to sweep
-sweepVar2 = "";
+sweepVar2 = "Cd";
 
 % Values to sweep second var. Use linspace and fill out first two values 
 % (need same length as vals2Sweep
-vals2Sweep2 = -3.5;
+vals2Sweep2 = [-1:-0.25:-2];
 
 %% Loading variables
 
@@ -87,8 +83,6 @@ if sweepBool
 
         pts = ptsCalc(ptsRef, numLaps, tr_end, tr_autoX, accTime, e_end);
         
-        e_end = e_end*numLaps;
-
         %% Reporting results if single value
         display("Endurance Laptime: " + tr_end + " seconds")
         display("Endurance Energy with Regen: " + e_end + " kWh")
@@ -101,8 +95,6 @@ if sweepBool
         display("Efficiency points: " + pts(4))
         display("Total Dynamic Points: " + pts(5) + " out of 500 available points")
         display("Total Points: " + pts(6) + " out of 600 available points *NOTE EFFICIENCY SCORING NOT ACCURATE*")
-
-        display("Total Comp Points: " + (pts(6) + 270) + " out of 1000 available *ASSUMING 2023 FORECASTED RESULTS*")
     else 
         % If multiple values given
 
@@ -118,6 +110,8 @@ if sweepBool
             tVec_acc = zeros(length(vals2Sweep),1);
 
             pts  = zeros(length(vals2Sweep),6);
+
+            
             
             %Run sim for each sweep value and record time and energy
             for i = 1:length(vals2Sweep); 
@@ -136,8 +130,6 @@ if sweepBool
                 pts(i,:) = ptsCalc(ptsRef, numLaps, tVec_end(i), tVec_autoX(i), tVec_acc(i), eVec_end(i));
             end
             
-            eVec_end = eVec_end*numLaps;
-
             %Plot time and erergy versus swept value
             figure(1);
             set(gcf, 'Position',  [100, 100, 850, 1000])
@@ -255,8 +247,6 @@ if sweepBool
                 end
             end
            
-            eVec_end = eVec_end*numLaps;
-
             %Plot time and erergy versus swept value
             figure(1);
             set(gcf, 'Position',  [100, 100, 850, 1000])
@@ -369,8 +359,6 @@ else
 
     pts = ptsCalc(ptsRef, numLaps, tr_end, tr_autoX, accTime, e_end);
     
-    e_end = e_end*numLaps
-
     %% Reporting results if single value
     display("Endurance Laptime: " + tr_end + " seconds")
     display("Endurance Energy with Regen: " + e_end + " kWh")
@@ -1481,7 +1469,7 @@ function accTime = OpenDRAG(veh)
     %% 75m time
     
     %Find index and time at which front of car hits  75m
-    acc_75m_t = T(find(X > 75,1));
+    acc_75m_t = T(find(X > carlength,1));
     
     %Timer starts when car passes line so find time when back of car passes line
     carlength = 2.250; %(m)
@@ -1507,13 +1495,13 @@ function pts = ptsCalc(ptsRef, numLaps, tEnd, tAutoX, tAcc, eEnd)
 
     % Calculate points for Endurance, Autocross, and Acceleration (from
     % rulebook)
-    ptsEnd = min(250, 250*((tMinEnd*1.45/tEnd)-1)/((tMinEnd*1.45/tMinEnd)-1));
-    ptsAutoX = min(125, 118.5*((tMinAutoX*1.45/tAutoX)-1)/((tMinAutoX*1.45/tMinAutoX)-1) + 6.5);
-    ptsAcc = min(100, 95.5*((tMinAcc*1.5/tAcc)-1)/((tMinAcc*1.5/tMinAcc)-1) + 4.5);
+    ptsEnd = 250*((tMinEnd*1.45/tEnd)-1)/((tMinEnd*1.45/tMinEnd)-1);
+    ptsAutoX = 118.5*((tMinAutoX*1.45/tAutoX)-1)/((tMinAutoX*1.45/tMinAutoX)-1) + 6.5;
+    ptsAcc = 95.5*((tMinAcc*1.5/tAcc)-1)/((tMinAcc*1.5/tMinAcc)-1) + 4.5;
 
     % Calculate efficiency factor and points
     effFactor = (tMinEnd/tEnd)*(eMinEnd/eEnd);
-    ptsEff = min(100, 100*(effFactor*eFactorMin)/(eFactorMax*eFactorMin));
+    ptsEff = 100*(effFactor*eFactorMin)/(eFactorMax*eFactorMin);
 
 
     %Return calculated points
