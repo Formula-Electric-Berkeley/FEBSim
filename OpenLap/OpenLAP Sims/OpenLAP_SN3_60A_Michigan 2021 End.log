@@ -7,8 +7,8 @@ _  / / /__  __ \  _ \_  __ \_  / __  /| |_  /_/ /
 =================================================
 Vehicle: SN3_60A
 Track:   Michigan 2021 End
-Date:    04/01/2024
-Time:    09:24:14
+Date:    31/01/2024
+Time:    20:53:06
 =================================================
 Simulation started.
 Maximum speed calculated at all points.
@@ -4910,7 +4910,7 @@ ________________________________________________
      63	   1551	      2	  387.5	  30.86	  30.88
 ________________________________________________
 Velocity profile calculated successfully.
-Solver time is: 1.326476 [s]
+Solver time is: 1.326506 [s]
 Post-processing initialised.
 Correct solution selected from modes.
 Laptime calculated.
@@ -4927,4 +4927,4 @@ Laptime   :  76.676 [s]
 Sector   1:  56.954 [s]
 Sector   2:  19.695 [s]
 Plots created and saved.
-Elapsed time is: 5.598670 [s]
+Elapsed time is: 10.232874 [s]

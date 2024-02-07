@@ -20,18 +20,18 @@ numLaps = 21;
 
 endurancefile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2021 End_Closed_Forward.mat' ;
 autoXfile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2022_Open_Forward.mat' ;
-vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat' ;
+vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_120A_Open Wheel.mat' ;
 ptsfile  = 'SN3_Points_Reference.xlsx';
 
 % Do you wish to sweep values? If false, given vehicle values will be used.
-sweepBool = true;
+sweepBool = false;
 
 % Variable to sweep. Run OpenLAP and see veh struct for vars available. Only
 % vars that are a single value currently work (no motor curves).
 sweepVar = "Cl";
 
 % Values to sweep var with
-vals2Sweep = [-1:-1:-4];
+vals2Sweep = [-0.5:-1:-4];
 
 % Do you want to sweep a second var? Set true if yes
 sweep2 = false;
@@ -1477,13 +1477,13 @@ function pts = ptsCalc(ptsRef, numLaps, tEnd, tAutoX, tAcc, eEnd)
 
     % Calculate points for Endurance, Autocross, and Acceleration (from
     % rulebook)
-    ptsEnd = 250*((tMinEnd*1.45/tEnd)-1)/((tMinEnd*1.45/tMinEnd)-1);
-    ptsAutoX = 118.5*((tMinAutoX*1.45/tAutoX)-1)/((tMinAutoX*1.45/tMinAutoX)-1) + 6.5;
-    ptsAcc = 95.5*((tMinAcc*1.5/tAcc)-1)/((tMinAcc*1.5/tMinAcc)-1) + 4.5;
+    ptsEnd = min(250, 250*((tMinEnd*1.45/tEnd)-1)/((tMinEnd*1.45/tMinEnd)-1));
+    ptsAutoX = min(125, 118.5*((tMinAutoX*1.45/tAutoX)-1)/((tMinAutoX*1.45/tMinAutoX)-1) + 6.5);
+    ptsAcc = min(100, 95.5*((tMinAcc*1.5/tAcc)-1)/((tMinAcc*1.5/tMinAcc)-1) + 4.5);
 
     % Calculate efficiency factor and points
     effFactor = (tMinEnd/tEnd)*(eMinEnd/eEnd);
-    ptsEff = 100*(effFactor*eFactorMin)/(eFactorMax*eFactorMin);
+    ptsEff = min(100, 100*(effFactor*eFactorMin)/(eFactorMax*eFactorMin));
 
 
     %Return calculated points

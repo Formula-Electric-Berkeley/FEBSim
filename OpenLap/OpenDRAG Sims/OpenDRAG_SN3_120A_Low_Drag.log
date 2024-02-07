@@ -6,8 +6,8 @@
                       /_/                                                 
 =======================================================================================
 Vehicle: SN3_120A_Low_Drag
-Date:    04/01/2024
-Time:    09:28:13
+Date:    31/01/2024
+Time:    20:52:57
 =======================================================================================
 Acceleration simulation started:
 Initial Speed: 0 km/h
@@ -19,7 +19,7 @@ Speed Trap #  3 150km/h  150.00	   0.10	   5280	      1	   8.94	 246.97	   8.94	
 Engine speed limited	 154.35	   0.06	   5433	      1	  10.47	 311.63	  10.47	 311.63
 Average acceleration:    0.417 [G]
 Peak acceleration   :    0.822 [G]
-Elapsed time is 0.241375 seconds.
+Elapsed time is 0.433386 seconds.
 ===============================================================================
 Deceleration simulation started:
 Initial Speed: 154.3545 [km/h]
@@ -31,7 +31,7 @@ Speed Trap #  1  50km/h   49.94	  -1.81	   1760	      1	  11.76	 346.37	   1.28	
 Stopped             	   0.00	  -1.65	      2	      1	  12.59	 352.05	   2.12	  40.42
 Average deceleration:    2.065 [G]
 Peak deceleration   :    3.134 [G]
-Elapsed time is 0.128674 seconds.
+Elapsed time is 0.165941 seconds.
 ===============================================================================
 Simulation completed successfully.
-Elapsed time is 0.409382 seconds.
+Elapsed time is 1.289430 seconds.
