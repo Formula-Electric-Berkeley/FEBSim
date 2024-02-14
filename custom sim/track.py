@@ -20,23 +20,17 @@ def read_info(workbook_file, sheet_name=1, start_row=2, end_row=10000, cols="A:C
     
     return opts
 
-# Track excel file selection
-
-filename = 'Michigan 2014.xlsx'
-
+#****************Settings and data uploading
 # Mode
-
 log_mode = 'speed & latacc'
 mode = 'shape data'
-
-# Settings
 
 # meshing
 mesh_size = 1.25 # [m]
 
 
+# Track excel file selection
 filename = 'Michigan 2014.xlsx'
-
 info = read_info(filename,'Shape')
 
 
@@ -61,11 +55,15 @@ L = np.sum(l) #total length
 X = np.cumsum(l)  # end position of each segment
 XC = np.cumsum(l) - l / 2  # center position of each segment
 
+
+
+
+
 j = 0  # index
 x = np.zeros(len(X) + np.sum(R == np.inf)) 
 r = np.zeros(len(X) + np.sum(R == np.inf))
 
-# editing points
+# editing points to a nice format; TODO -> better understand**********************
 for i in range(len(X)):
     if R[i] == np.inf:  # end of straight point injection
         x[j] = X[i] - l[i]
@@ -76,17 +74,14 @@ for i in range(len(X)):
         r[j] = segment_type[i] / R[i]
         j += 1
 
-# saving coarse results
+# saving coarse results; these are the values we interpolate to get a mesh
 unique_indices = np.unique(x, return_index=True)[1]
 xx = x[unique_indices]
 rr = r[unique_indices]
 
 
-#dx = np.ones(n)
 
-# Assuming L, mesh_size, xx, rr, el, bk, gf, and sc are NumPy arrays
-
-# New fine position vector
+# New fine position vector; this is where we mesh the track
 if np.floor(L) < L:  # check for injecting last point
     x = np.concatenate([np.arange(0, np.floor(L), mesh_size), [L]])
 else:
@@ -99,15 +94,15 @@ dx = np.concatenate([dx, [dx[-1]]])
 # Number of mesh points
 n = len(x)
 
-# Fine curvature vector
+# Fine curvature vector; interpolation of unique radii at all unique positions
 r_func = interp1d(xx, rr,kind='cubic', fill_value='extrapolate')
 r = r_func(x)
 
-#r_interp = interp1d(xx, rr, kind='pchip', fill_value='extrapolate')
-#r = np.interp(x, xx, rr, left=np.nan, right=np.nan)
-
 # Fine turn direction vector
 t = np.sign(r)
+
+
+
 
 
 

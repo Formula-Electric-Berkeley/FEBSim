@@ -1,5 +1,6 @@
 import math
 import matplotlib.pyplot as plt
+from matplotlib import patches
 
 # reset system, initialize track points
 from TrackDataSimple import Length, Radius, Type
@@ -12,11 +13,12 @@ y1 = 0
 angle = 0
 
 # create list of all points and segment data
-heading=[nPoints]
-turn = [nPoints]
-ang = [nPoints]
-x = [nPoints]
-y = [nPoints]
+heading=[0] * nPoints
+
+turn = [0] * nPoints
+ang = [0] * nPoints
+x = [0] * nPoints
+y = [0] * nPoints
 
 # loop through each section of lap
 for n in range(nPoints):
@@ -83,4 +85,5 @@ for i in range(nPoints):
     dtheta = theta2 - theta1
     if dir == "Left":
         dtheta = -dtheta
-    arc = plt.Arc((a[0], a[1]), 2*r, 2*r, theta1, theta2)
+    arc = patches.Arc((a[0], a[1]), 2*r, 2*r, theta1=theta1, theta2=theta2)
+    print(a)

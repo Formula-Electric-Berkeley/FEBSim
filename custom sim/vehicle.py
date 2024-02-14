@@ -19,7 +19,6 @@ def read_info(workbook_file, sheet_name=1, start_row=2, end_row=10000, cols="B:C
     
     return opts
 
-
 filename = 'FEB_SN3_30kW.xlsx'
 
 info = read_info(filename,'Info')
@@ -321,5 +320,11 @@ def plotMotorCurve():
     
     plt.show()
 
+def reload():
+    filename = 'FEB_SN3_30kW.xlsx'
+    
+    info = read_info(filename,'Info')
+    data = read_info(filename,'Torque Curve', cols="A:B")
+    
 plotMotorCurve()
-        
+plotGGV()

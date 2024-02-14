@@ -15,17 +15,15 @@ Type:          Permanent
 Configuration: Closed
 Direction:     Forward
 Mirror:        Off
-Date:          06/10/2023
-Time:          11:05:07
+Date:          29/01/2024
+Time:          22:30:58
 ==================================================================
 Track generation started.
 Pre-processing completed.
 Coarse meshing completed.
 Fine meshing completed with mesh size: 0.25 [m]
-Apex calculation completed.
-Track rotated.
-Closing fine mesh map.
-Fine mesh map closed.
-Fine mesh map created.
-Plots created and saved.
-Track generated successfully.
+{'rotz' requires <a href="matlab:matlab.internal.addons.launchers.showExplorer('ErrorRecovery', 'identifier', 'AR', 'focused', 'rotz');">Phased Array System Toolbox</a>.
+
+Error in <a href="matlab:matlab.internal.language.introspective.errorDocCallback('OpenTRACK', 'C:\Users\EJDRO\OneDrive\Documents\GitHub\FEBSim\OpenLap\OpenTRACK.m', 407)" style="font-weight:bold">OpenTRACK</a> (<a href="matlab: opentoline('C:\Users\EJDRO\OneDrive\Documents\GitHub\FEBSim\OpenLap\OpenTRACK.m',407,0)">line 407</a>)
+    xyz = rotz(angle_head(i-1))*[dx(i-1);0;0]+p ;
+} 

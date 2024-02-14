@@ -189,13 +189,18 @@ def simulate():
             xapex.append(i)
 
     ax = plt.axes()
-    ax.plot(x, v_max)
-    ax.plot(x, tr.r*50)
+    ax.plot(x, v_max, label="Max")
+    ax.plot(x, tr.r*50, label="1/Radius (arb.)")
     ax.scatter(xapex, old_apexes)
+    ax.set_ylabel("Velocity (m/s)")
+    ax.set_xlabel("Longitudinal Coordinate x (m)")
+    ax.set_title("Velocity Trace")
+    
     
     #print(V)
 
-    ax.plot(x, V, color='r')
+    ax.plot(x, V, color='r', label="Final")
+    ax.legend()
     plt.show()
     # laptime calculation    
     dt = np.divide(tr.dx, V)
@@ -247,6 +252,8 @@ def simulate():
     
     print("Energy cost is {:.3f} kWh".format(in_kWh)) 
     print()
+    
+    #veh.plotMotorCurve()
 
 
 
@@ -257,3 +264,4 @@ def test():
     print(v_max)
 
 simulate()
+
