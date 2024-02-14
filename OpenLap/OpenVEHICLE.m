@@ -18,11 +18,11 @@
 %
 % Open Source MATLAB project created by:
 %
-% Michael Chalkiopoulos
+% Michael Halkiopoulos
 % Cranfield University Advanced Motorsport MSc Engineer
 % National Technical University of Athens MEng Mechanical Engineer
 %
-% LinkedIn: https://www.linkedin.com/in/michael-chalkiopoulos/
+% LinkedIn: https://www.linkedin.com/in/michael-halkiopoulos/
 % email: halkiopoulos_michalis@hotmail.com
 % MATLAB file exchange: https://uk.mathworks.com/matlabcentral/fileexchange/
 % GitHub: https://github.com/mc12027
@@ -32,14 +32,13 @@
 %% Clearing Memory
 
 clear
-clc
 close all force
 diary('off')
 fclose('all') ;
 
 %% Vehicle file selection
 
-filename = 'FEB_SN3_30kW.xlsx' ;
+filename = 'SN3_60A.xlsx' ;
 
 %% Reading vehicle file
 
@@ -136,6 +135,14 @@ beta = tyre_radius/(br_disc_d/2-br_pad_h/2)/br_pist_a/br_pad_mu/4 ; % [Pa/N] per
 phi = br_mast_a/br_ped_r*2 ; % [-] for both systems
 % HUD
 disp('Braking model generated successfully.')
+
+%% Steering Model
+
+a = (1-df)*L ; % distance of front axle from center of mass [mm]
+b = -df*L ; % distance of rear axle from center of mass [mm]
+C = 2*[CF,CF+CR;CF*a,CF*a+CR*b] ; % steering model matrix
+% HUD
+disp('Steering model generated successfully.')
 
 %% Driveline Model
 
