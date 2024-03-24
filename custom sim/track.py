@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Nov 25 19:42:50 2023
-
-@author: EJDRO
-"""
-
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
@@ -74,6 +67,7 @@ for i in range(len(X)):
         r[j] = segment_type[i] / R[i]
         j += 1
 
+
 # saving coarse results; these are the values we interpolate to get a mesh
 unique_indices = np.unique(x, return_index=True)[1]
 xx = x[unique_indices]
@@ -101,12 +95,23 @@ r = r_func(x)
 # Fine turn direction vector
 t = np.sign(r)
 
+#All information should be encoded in x, r
 
+#Track formatting:
+fullness =  len(dx)
+segments = []
+for i in range(fullness):
+    segments.append([dx[i], r[i]])
 
-
-
+segments = np.asarray(segments)
+track_widths = np.ones(len(dx))*4.0
 
 factor_grip = np.ones(n)
 bank = np.zeros(n)
 incl = np.zeros(n)
 info.config = 'Closed'
+
+
+
+
+#print(segments)
