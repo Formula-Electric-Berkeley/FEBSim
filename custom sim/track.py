@@ -111,7 +111,30 @@ bank = np.zeros(n)
 incl = np.zeros(n)
 info.config = 'Closed'
 
+WA = 100
+points = 50
+x = np.linspace(0, WA, points)
+y = np.ones(len(x))*WA
+x1 = np.linspace(100, 100+WA)
+#print(x1)
+
+y1 = np.sqrt(WA**2 - (x1-WA)**2)
+y2 = -np.sqrt(WA**2 - (x1-WA)**2)
 
 
+y = np.concatenate((y, y1, y2))
+x = np.concatenate((x, x1, x1))
+
+curvatures = []
+for i in range(len(x)):
+    if i+1 <= points:     kappa = 0
+    else:   kappa = 1/WA
+    curvatures.append(kappa)
+
+#print(curvatures[:50])
+#import matplotlib.pyplot as plt
+
+#plt.scatter(x, y)
+#plt.show()
 
 #print(segments)

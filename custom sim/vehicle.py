@@ -165,6 +165,12 @@ track_width_front = wf
 track_width_rear = wr
 cg_height = h
 
+#How to find the max rad/s of the wheels?
+gear_ratio = ratio_final
+omega_max = 5500/gear_ratio #5500 rpm is the max for the motor
+omega_max = omega_max*np.pi/30 #convert to rad/s
+omega_max = omega_max * 100 #factor of safety (to account for braking)
+
 #We don't have gears or NOG, so that part can be left empty
 #We exclude gears from our Powertrain model, but if we somehow get gears in the future, it should add back fast
 
