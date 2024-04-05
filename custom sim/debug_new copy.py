@@ -3,6 +3,7 @@ import sys
 import time
 import numpy as np
 import casadi as ca
+import pandas as pd
 
 import track as tr
 import test_track as tst
@@ -157,7 +158,7 @@ def opt_mintime():
         wfl_n = ca.SX.sym('wfl_n')
         wrl_n = ca.SX.sym('wrl_n')
 
-        wheel_scale = 5000             #not physical, but helps convergence
+        wheel_scale = 50000             #not physical, but helps convergence
         wfl_s = wheel_scale
         wrl_s = wheel_scale
 
@@ -190,9 +191,9 @@ def opt_mintime():
         f_brake = f_brake_s * f_brake_n
 
         # lateral wheel load transfer [N]
-        gamma_y_n = ca.SX.sym('gamma_y_n')
-        gamma_y_s = 5000.0
-        gamma_y = gamma_y_s * gamma_y_n
+        gamma_x_n = ca.SX.sym('gamma_x_n')
+        gamma_x_s = 5000.0
+        gamma_x = gamma_x_s * gamma_x_n
 
         # curvature of reference line [rad/m]
         kappa = ca.SX.sym('kappa')      #no real good spot to define this; not a state or a control really
@@ -204,10 +205,10 @@ def opt_mintime():
         #u = ca.vertcat(delta_n, torque_drive_n, f_brake_n)
 
         # scaling factors for control variables
-        u_s = np.array([delta_s, torque_drive_s, f_brake_s, gamma_y_s])
+        u_s = np.array([delta_s, torque_drive_s, f_brake_s, gamma_x_s])
 
         # put all controls together
-        u = ca.vertcat(delta_n, torque_drive_n, f_brake_n, gamma_y_n)
+        u = ca.vertcat(delta_n, torque_drive_n, f_brake_n, gamma_x_n)
 
         # ------------------------------------------------------------------------------------------------------------------
         # MODEL PHYSICS ----------------------------------------------------------------------------------------------------
@@ -239,8 +240,8 @@ def opt_mintime():
         
 
         # compute normal forces, assumes wf ~ wr
-        FNfl = mass*g*lr/L/2 
-        FNrl = mass*g*lf/L/2 
+        FNfl = mass*g*lr/L/2 + gamma_x
+        FNrl = mass*g*lf/L/2 - gamma_x
 
 
         # compute body frame components of linear velocity at each wheel
@@ -265,8 +266,8 @@ def opt_mintime():
         #Works without slip ratios!
 
         # compute wheel traction forces in wheel frame
-        Flfl, Ftfl = combined_slip_forces(0.0, alpha_fl, FNfl)
-        Flrl, Ftrl = combined_slip_forces(0.0, alpha_rl, FNrl)
+        Flfl, Ftfl = combined_slip_forces(sigma_fl, alpha_fl, FNfl)
+        Flrl, Ftrl = combined_slip_forces(sigma_rl, alpha_rl, FNrl)
 
         # change wheel forces to body frame
         Fxfl = Flfl * ca.cos(delta) - Ftfl * ca.sin(delta)
@@ -282,14 +283,14 @@ def opt_mintime():
         Fy = Fyfl + Fyrl          #net force in the y
         Kz = lf*(Fyfl) - lr*(Fyrl)      #net torque about z axis
 
-       
+
         ### PART B: WHEEL EQUATIONS OF MOTION
         Fbrake_fl = veh.brake_fl*f_brake
         Fbrake_rl = veh.brake_rl*f_brake
-
+        
         # wheel dynamics
-        Tbrake_fl = rb * Fbrake_fl * smooth_sign(wfl)
-        Tbrake_rl = rb * Fbrake_rl * smooth_sign(wrl)
+        Tbrake_fl = rb * Fbrake_fl #* smooth_sign(wfl)
+        Tbrake_rl = rb * Fbrake_rl #* smooth_sign(wrl)
         #TODO: why would the wheels ever spin backwards? If they slip while we brake?
         
 
@@ -328,8 +329,8 @@ def opt_mintime():
         f_drive_max = veh.drive_max / torque_drive_s    # max. longitudinal drive torque [Nm]
         f_brake_min = -veh.brake_max / f_brake_s        # min. longitudinal brake force [N]
         f_brake_max = 0.0                               # max. longitudinal brake force [N]
-        gamma_y_min = -np.inf                           # min. lateral wheel load transfer [N]
-        gamma_y_max = np.inf                            # max. lateral wheel load transfer [N]
+        gamma_x_min = -np.inf                           # min. lateral wheel load transfer [N]
+        gamma_x_max = np.inf                            # max. lateral wheel load transfer [N]
      
         #TODO
         #test if we're violating these indivual constraints
@@ -353,10 +354,10 @@ def opt_mintime():
         #TODO: this and the scalar for the wheel speed matter a lot
         wheel_bound = 4e+2 #2*v_max/veh.re                             # max. wheel speed [rad/s]; fixes slip angle to +/- 1
         #Note -- optimization DOES NOT SUCCEED if max is 1.5*v_max*veh.re; we need to decrease our scalar?
-        wfl_min = -wheel_bound / wfl_s
+        wfl_min = 0.0 
         wfl_max = wheel_bound / wfl_s                  
 
-        wrl_min = -wheel_bound / wrl_s                 
+        wrl_min = 0.0               
         wrl_max = wheel_bound / wrl_s  
 
         # ------------------------------------------------------------------------------------------------------------------
@@ -414,7 +415,7 @@ def opt_mintime():
         
         lbw.append([v_min, v_min, omega_z_min, n_min, xi_min, wfl_min, wrl_min])
         ubw.append([v_max, v_max, omega_z_max, n_max, xi_max, wfl_max, wrl_max])
-        w0.append([vx_guess, 0.0, 0.0, 0.0, 0.0, vx_guess*veh.re, vx_guess*veh.re])
+        w0.append([vx_guess, 0.0, 0.0, 0.0, 0.0, vx_guess/veh.re, vx_guess/veh.re])
         x_opt.append(Xk * x_s)
 
         # loop along the racetrack and formulate path constraints & system dynamics
@@ -424,9 +425,9 @@ def opt_mintime():
                 # add decision variables for the control
                 Uk = ca.MX.sym('U_' + str(k), nu)
                 w.append(Uk)
-                lbw.append([delta_min, f_drive_min, f_brake_min, gamma_y_min])
-                ubw.append([delta_max, f_drive_max, f_brake_max, gamma_y_max])
-                w0.append([0.0] * nu)
+                lbw.append([delta_min, f_drive_min, f_brake_min, gamma_x_min])
+                ubw.append([delta_max, f_drive_max, f_brake_max, gamma_x_max])
+                w0.append([0.0, f_drive_max, 0.0, 0.0])
 
                 # add decision variables for the state at collocation points
                 Xc = []
@@ -436,7 +437,7 @@ def opt_mintime():
                         w.append(Xkj)
                         lbw.append([-np.inf] * nx)
                         ubw.append([np.inf] * nx)
-                        w0.append([vx_guess, 0.0, 0.0, 0.0, 0.0, vx_guess*veh.re, vx_guess*veh.re])
+                        w0.append([vx_guess, 0.0, 0.0, 0.0, 0.0, vx_guess/veh.re, vx_guess/veh.re])
                         #might need to reset initial guess to 0 for spin speeds bc they may be negative
 
                 # loop over all collocation points
@@ -485,7 +486,7 @@ def opt_mintime():
 
                 # path constraint: f_drive * f_brake == 0 (no simultaneous operation of brake and accelerator pedal)
                 g.append(Uk[1] * Uk[2])
-                lbg.append([0.0])#-20000.0 / (torque_drive_s * f_brake_s)])
+                lbg.append([-20000.0 / (torque_drive_s * f_brake_s)])
                 ubg.append([0.0])
 
 
@@ -500,7 +501,17 @@ def opt_mintime():
 
                 #TODO: when it converges to an infeasible solution, check what constraints it's violating
                 
-                #
+
+                # get tire forces
+                f_y_flk, f_y_rlk = f_fy(Xk, Uk)
+
+                f_yk = f_y_flk + f_y_rlk
+
+                # path constraint: lateral wheel load transfer
+                g.append( Uk[3] * gamma_x_s *(veh.lf+veh.lr) + veh.cg_height*f_yk)
+                lbg.append([0.0])
+                ubg.append([0.0])
+
 
                 
         # boundary constraint: start states = final states
@@ -561,7 +572,7 @@ def opt_mintime():
 
         # solver options
         opts = {"expand": True, 
-                "ipopt.max_iter": 2500,
+                "ipopt.max_iter": 20000,
                 "ipopt.tol": 1e-7}
 
         # solver options for warm start
@@ -604,6 +615,26 @@ def opt_mintime():
         t_opt = np.hstack((0.0, np.cumsum(dt_opt)))
 
         print("Optimal laptime is: ", t_opt)
+
+        # Create some sample data
+
+
+        # Convert numpy arrays to pandas DataFrames
+        df0 = pd.DataFrame(t_opt)
+        df1 = pd.DataFrame(x_opt)
+        df2 = pd.DataFrame(u_opt)
+
+        # Create a Pandas Excel writer using XlsxWriter as the engine
+        writer = pd.ExcelWriter('arrays2.xlsx', engine='xlsxwriter')
+
+        # Write each dataframe to a different sheet
+        df0.to_excel(writer, sheet_name='Sheet0', index=False)
+        df1.to_excel(writer, sheet_name='Sheet1', index=False)
+        df2.to_excel(writer, sheet_name='Sheet2', index=False)
+
+        # Close the Pandas Excel writer and output the Excel file
+        writer.close()
+        df1.head()
 
         return -x_opt[:-1, 3], x_opt[:-1, 0]
 

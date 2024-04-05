@@ -136,5 +136,21 @@ for i in range(len(x)):
 
 #plt.scatter(x, y)
 #plt.show()
+import pandas as pd
+
+# Convert numpy arrays to pandas DataFrames
+df1 = pd.DataFrame(x)
+df2 = pd.DataFrame(y)
+
+# Create a Pandas Excel writer using XlsxWriter as the engine
+writer = pd.ExcelWriter('arrays2.xlsx', engine='xlsxwriter')
+
+# Write each dataframe to a different sheet
+df1.to_excel(writer, sheet_name='Sheet1', index=False)
+df2.to_excel(writer, sheet_name='Sheet2', index=False)
+
+# Close the Pandas Excel writer and output the Excel file
+writer.close()
+
 
 #print(segments)
