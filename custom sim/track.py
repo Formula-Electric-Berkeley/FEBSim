@@ -23,7 +23,7 @@ mesh_size = 1.25 # [m]
 
 
 # Track excel file selection
-filename = 'Michigan 2014.xlsx'
+filename = 'test_track.xlsx'
 info = read_info(filename,'Shape')
 
 
@@ -31,6 +31,7 @@ info = read_info(filename,'Shape')
 #Getting Curvature
 R = info.loc[:, "Corner Radius"] #0 or NaN on straights, otherwise a float
 R = np.nan_to_num(R)
+R = R.astype(float)
 R[R==0] = np.inf
 r2 = np.reciprocal(R)
 n = len(R)
@@ -111,46 +112,26 @@ bank = np.zeros(n)
 incl = np.zeros(n)
 info.config = 'Closed'
 
-WA = 100
-points = 50
-x = np.linspace(0, WA, points)
-y = np.ones(len(x))*WA
-x1 = np.linspace(100, 100+WA)
-#print(x1)
+print(r)
 
-y1 = np.sqrt(WA**2 - (x1-WA)**2)
-y2 = -np.sqrt(WA**2 - (x1-WA)**2)
+#New stuff for testing bicycle model
+import matplotlib.pyplot as plt
 
 
-y = np.concatenate((y, y1, y2))
-x = np.concatenate((x, x1, x1))
+def plot_track(x, r):
+    from scipy.integrate import cumtrapz
 
-curvatures = []
-for i in range(len(x)):
-    if i+1 <= points:     kappa = 0
-    else:   kappa = 1/WA
-    curvatures.append(kappa)
+    y = cumtrapz(r, x, initial=0)
 
-#print(curvatures[:50])
-#import matplotlib.pyplot as plt
+    # Plot the track
+    plt.figure(figsize=(10, 5))
+    plt.scatter(x, y, label='Track')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('Track Plot')
+    plt.legend()
+    plt.grid(True)
+    plt.axis('equal')
+    plt.show()
 
-#plt.scatter(x, y)
-#plt.show()
-import pandas as pd
-
-# Convert numpy arrays to pandas DataFrames
-df1 = pd.DataFrame(x)
-df2 = pd.DataFrame(y)
-
-# Create a Pandas Excel writer using XlsxWriter as the engine
-writer = pd.ExcelWriter('arrays2.xlsx', engine='xlsxwriter')
-
-# Write each dataframe to a different sheet
-df1.to_excel(writer, sheet_name='Sheet1', index=False)
-df2.to_excel(writer, sheet_name='Sheet2', index=False)
-
-# Close the Pandas Excel writer and output the Excel file
-writer.close()
-
-
-#print(segments)
+plot_track(x, r)

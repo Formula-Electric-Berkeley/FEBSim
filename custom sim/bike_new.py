@@ -566,7 +566,7 @@ def opt_mintime():
                 ubg.append([0.0])
 
                 # path constraint: lateral wheel load transfer
-                g.append( Uk[3] * gamma_y_s *(veh.wf+veh.wr) + veh.cg_height*f_yk)
+                g.append( Uk[3] * gamma_y_s *(veh.wf+veh.wr) + veh.cg_height*f_xk)
                 lbg.append([0.0])
                 ubg.append([0.0])
 
