@@ -64,7 +64,7 @@ for i in range(len(X)):
         x[j + 1] = X[i]
         j += 2
     else:  # circular segment 
-        tol = 1e-6
+        tol = 1e-1
         x[j] = X[i] - l[i]*(1-tol) #set the curvature at 10% into the curve
         x[j + 1] = X[i] - l[i]*tol #set the curvature 10% out of the curve
         r[j] = segment_type[i] / R[i]
@@ -79,8 +79,6 @@ unique_indices = np.unique(x, return_index=True)[1]
 xx = x[unique_indices]
 rr = r[unique_indices]
 
-print(xx)
-print(rr)
 
 finer_mesh_multiplier = 1
 
@@ -103,8 +101,6 @@ r = r_func(x)
 
 # Fine turn direction vector
 t = np.sign(r)
-
-print(r)
 
 #All information should be encoded in x, r
 

@@ -134,7 +134,7 @@ drag_coeff = 1/2*rho*factor_Cl*Cl*A #coefficient in front of v^2 for drag force 
 delta_max = 38 * np.pi / 180 #38 degrees is our max steering angle
 drive_max = 20000 #Nm
 brake_max = 50000 #N
-max_velocity = 50 #m/s; makes convergence faster
+max_velocity = 30 #m/s; makes convergence faster
 
 #Brake coefficients (how is the brake force split up)
 brake_fr = 0.5*0.6

@@ -129,12 +129,12 @@ def opt_mintime():
         nx = 9 #5 from them, 4 wheel speed
 
         
-        # longitudinal velocity [m/s]
+        # velocity [m/s]
         v_n = ca.SX.sym('v_n')
         v_s = 50
         v = v_s * v_n
 
-        # lateral velocity [m/s]
+        # sideslip angle [rad/s]
         beta_n = ca.SX.sym('beta_n')
         beta_s = 0.5
         beta = beta_s * beta_n
@@ -160,7 +160,7 @@ def opt_mintime():
         wrl_n = ca.SX.sym('wrl_n')
         wrr_n = ca.SX.sym('wrr_n')
 
-        wheel_scale = 300 #crucial for convergence
+        wheel_scale = 300               # crucial for convergence
         wfr_s = wheel_scale
         wfl_s = wheel_scale
         wrr_s = wheel_scale
@@ -210,12 +210,6 @@ def opt_mintime():
         kappa = ca.SX.sym('kappa')      #no real good spot to define this; not a state or a control really
 
         # scaling factors for control variables
-        #u_s = np.array([delta_s, torque_drive_s, f_brake_s])
-
-        # put all controls together
-        #u = ca.vertcat(delta_n, torque_drive_n, f_brake_n)
-
-        # scaling factors for control variables
         u_s = np.array([delta_s, torque_drive_s, f_brake_s, gamma_x_s, gamma_y_s])
 
         # put all controls together
@@ -249,15 +243,12 @@ def opt_mintime():
         '''
 
 
-
-        # reframe state to be convenient for UMich formulations (normal and tangent to the reference line)
-
-        # side slip angle, angle from longitudinal vehicle axis to velocity [rad]
+        # project velocity to longitudinal and lateral vehicle axes
         vx = v*ca.cos(beta)
         vy = v*ca.sin(beta)
         
 
-        # compute normal forces, assumes wf ~ wr
+        # compute normal forces, assumes wf roughly equals wr
         FNfr = mass*g*lr/L/2 + gamma_x - gamma_y
         FNfl = mass*g*lr/L/2 + gamma_x + gamma_y
         FNrr = mass*g*lf/L/2 - gamma_x - gamma_y
@@ -409,17 +400,21 @@ def opt_mintime():
         #State format:   x = (vx, vy, omega_z, n, xi, wfr, wfl, wrl, wrr)
         v_min = 0.0 / v_s                               # min. velocity [m/s]
         v_max = veh.max_velocity / v_s                  # max. velocity [m/s]
-        beta_min = -0.5 * np.pi / beta_s                # min. side slip angle [rad]
-        beta_max = 0.5 * np.pi / beta_s                 # max. side slip angle [rad]
+        beta_min = -0.25 * np.pi / beta_s                # min. side slip angle [rad]
+        beta_max = 0.25 * np.pi / beta_s                 # max. side slip angle [rad]
+
+        #TODO: what's the max beta angle really? Max steering angle is 38
+
         omega_z_min = - 0.5 * np.pi / omega_z_s         # min. yaw rate [rad/s]
         omega_z_max = 0.5 * np.pi / omega_z_s           # max. yaw rate [rad/s]
-        xi_min = - 0.5 * np.pi / xi_s                   # min. relative angle to tangent on reference line [rad]
-        xi_max = 0.5 * np.pi / xi_s                     # max. relative angle to tangent on reference line [rad]
+
+        xi_min = - 0.25 * np.pi / xi_s                   # min. relative angle to tangent on reference line [rad]
+        xi_max = 0.25 * np.pi / xi_s                     # max. relative angle to tangent on reference line [rad]
 
         #TODO check these also (v_max etc.)
 
         #TODO: this and the scalar for the wheel speed matter a lot
-        wheel_bound = 200 #2*veh.max_velocity/veh.re                             # max. wheel speed [rad/s]; fixes slip angle to +/- 1
+        wheel_bound = 2*veh.max_velocity/veh.re                             # max. wheel speed [rad/s]; fixes slip angle to +/- 1
         #Note -- optimization DOES NOT SUCCEED if max is 1.5*v_max*veh.re; we need to decrease our scalar?
         wheelspeed_min = 0.0 
         wheelspeed_max = wheel_bound / wheel_scale                  
@@ -474,12 +469,13 @@ def opt_mintime():
         # boundary constraint: lift initial conditions
         Xk = ca.MX.sym('X0', nx)
         w.append(Xk)
-        n_min = 0 #(-tr.track_widths[0] + veh.car_width / 2) / n_s
-        n_max = 0 #(tr.track_widths[0] - veh.car_width / 2) / n_s
+        #an average f1 track is 12m wide, the car is about 1, and we want a 1m buffer on each side
+        n_min = -4/n_s #(-tr.track_widths[0] + veh.car_width / 2) / n_s
+        n_max = 4/n_s #(tr.track_widths[0] - veh.car_width / 2) / n_s
         
-        lbw.append([v_min, beta_min, omega_z_min, n_min, xi_min, wheelspeed_min, wheelspeed_min, wheelspeed_min, wheelspeed_min])
-        ubw.append([v_max, beta_max, omega_z_max, n_max, xi_max, wheelspeed_max, wheelspeed_max, wheelspeed_max, wheelspeed_max])
-        w0.append([vx_guess, 0.0, 0.0, 0.0, 0.0, vx_guess/veh.re, vx_guess/veh.re, vx_guess/veh.re, vx_guess/veh.re])
+        lbw.append([v_min, 0.0, 0.0, n_min, 0.0, wheelspeed_min, wheelspeed_min, wheelspeed_min, wheelspeed_min])
+        ubw.append([v_max, 0.0, 0.0, n_max, 0.0, wheelspeed_max, wheelspeed_max, wheelspeed_max, wheelspeed_max])
+        w0.append([v_max, 0.0, 0.0, 0.0, 0.0, v_max/veh.re, v_max/veh.re, v_max/veh.re, v_max/veh.re])
         x_opt.append(Xk * x_s)
 
         # loop along the racetrack and formulate path constraints & system dynamics
@@ -537,8 +533,8 @@ def opt_mintime():
                 # add new decision variables for state at end of the collocation interval
                 Xk = ca.MX.sym('X_' + str(k + 1), nx)
                 w.append(Xk)
-                n_min = 0 #(-tr.track_widths[k + 1] + veh.car_width / 2.0) / n_s
-                n_max = 0 #(tr.track_widths[k + 1] - veh.car_width / 2.0) / n_s
+                #n_min = 0 #(-tr.track_widths[k + 1] + veh.car_width / 2.0) / n_s
+                #n_max = 0 #(tr.track_widths[k + 1] - veh.car_width / 2.0) / n_s
                 lbw.append([v_min, beta_min, omega_z_min, n_min, xi_min, wheelspeed_min, wheelspeed_min, wheelspeed_min, wheelspeed_min])
                 ubw.append([v_max, beta_max, omega_z_max, n_max, xi_max, wheelspeed_max, wheelspeed_max, wheelspeed_max, wheelspeed_max])
                 w0.append([vx_guess, 0.0, 0.0, 0.0, 0.0, vx_guess/veh.re, vx_guess/veh.re, vx_guess/veh.re, vx_guess/veh.re])
@@ -547,6 +543,9 @@ def opt_mintime():
                 g.append(Xk_end - Xk)
                 lbg.append([0.0] * nx)
                 ubg.append([0.0] * nx)
+
+                
+                #TODO; We're getting bad primary infeasibility now. ~1e-2. This was before and adfter we added n_min nonzero
 
                 # path constraint: f_drive * f_brake == 0 (no simultaneous operation of brake and accelerator pedal)
                 g.append(Uk[1] * Uk[2])
@@ -716,7 +715,7 @@ def opt_mintime():
         header = ['time', 'v', 'beta', 'omega_z', 'n', 'xi', 'wfr', 'wfl', 'wbl', 'wbr', 'delta', 'torque_drive', 'f_brake', 'gamma_x', 'gamma_y']
 
         # Create a Pandas Excel writer using XlsxWriter as the engine
-        writer = pd.ExcelWriter('arrays11.xlsx', engine='xlsxwriter')
+        writer = pd.ExcelWriter('arrays13.xlsx', engine='xlsxwriter')
 
         # Write the dataframe to a excel sheet
         df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
