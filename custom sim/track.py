@@ -23,7 +23,7 @@ mesh_size = 1.25 # [m]
 
 
 # Track excel file selection
-filename = 'test_track.xlsx'
+filename = 'Michigan 2014.xlsx'
 info = read_info(filename,'Shape')
 
 
@@ -96,7 +96,7 @@ dx = np.concatenate([dx, [dx[-1]]])
 n = len(x)
 
 # Fine curvature vector; interpolation of unique radii at all unique positions
-r_func = interp1d(xx, rr)
+r_func = interp1d(xx, rr, fill_value="extrapolate")
 r = r_func(x)
 
 # Fine turn direction vector
@@ -150,4 +150,4 @@ def plot_track(s, kappa):
     plt.grid(True)
     plt.show()
 
-#plot_track(x, r)
+plot_track(x, r)
