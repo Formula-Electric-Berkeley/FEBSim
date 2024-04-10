@@ -103,11 +103,9 @@ def perpendicular_Plotter():
     plt.axis('equal')
     plt.show()
 
-delta_d = tr.mesh_size
+#delta_d = tr.mesh_size
 
-snapshots = np.asarray(tile_track(tr.segments))
+#snapshots = np.asarray(tile_track(tr.segments))
 
-kappas = np.abs(tr.segments[:, 1])
+#kappas = np.abs(tr.segments[:, 1])
 
-#plt.scatter(snapshots[:, 0], snapshots[:, 1])
-#plt.show()

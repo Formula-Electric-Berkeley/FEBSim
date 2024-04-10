@@ -576,6 +576,12 @@ def opt_mintime():
                 lbg.append([0.0])
                 ubg.append([0.0])
 
+
+                #TODO: remaining issues
+                #fix alternating between drive and brake
+                #fix hard steering
+
+
                 # path constraint: actor dynamic (limit rate of change of steering and drive commands)
                 delta_step = 4
                 drive_step = 1 
@@ -710,7 +716,7 @@ def opt_mintime():
         header = ['time', 'v', 'beta', 'omega_z', 'n', 'xi', 'wfr', 'wfl', 'wbl', 'wbr', 'delta', 'torque_drive', 'f_brake', 'gamma_x', 'gamma_y']
 
         # Create a Pandas Excel writer using XlsxWriter as the engine
-        writer = pd.ExcelWriter('arrays10.xlsx', engine='xlsxwriter')
+        writer = pd.ExcelWriter('arrays11.xlsx', engine='xlsxwriter')
 
         # Write the dataframe to a excel sheet
         df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
