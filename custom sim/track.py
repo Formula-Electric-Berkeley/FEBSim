@@ -73,7 +73,6 @@ for i in range(len(X)):
 
 
 
-
 # saving coarse results; these are the values we interpolate to get a mesh
 unique_indices = np.unique(x, return_index=True)[1]
 xx = x[unique_indices]
