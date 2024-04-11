@@ -12,7 +12,7 @@ def pacejka_model(alpha, B, C, D, E, F):
 
 
 # Define the path to the CSV file
-data_path = 'B1320run50.csv'
+data_path = '/Users/nicholaslemoff/Desktop/FEBSim/TireSim/tirecsvfiles/B1320run50.csv'
 
 # Load the data, skipping the first row which contains units
 data = pd.read_csv(data_path, skiprows=1)
