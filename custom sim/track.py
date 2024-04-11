@@ -150,8 +150,4 @@ def plot_track(s, kappa):
     plt.grid(True)
     plt.show()
 
-<<<<<<< Updated upstream
 plot_track(x, r)
-=======
-plot_track(x, r)
->>>>>>> Stashed changes
