@@ -57,13 +57,11 @@ def opt_mintime():
 
         
         #kappa_refline_cl = np.abs(tr.segments[:, 1])
-        kappa_refline_cl = tr.curvatures
+        kappa_refline_cl = tr.curvatures #
 
-        discr_points = len(tr.curvatures)#segments)
-        w_tr_left_cl = tr.track_widths
-        w_tr_right_cl = tr.track_widths
+        discr_points = len(tr.curvatures)
 
-
+        
 
         # optimization steps (0, 1, 2 ... end point/start point)
         steps = [i for i in range(discr_points)]

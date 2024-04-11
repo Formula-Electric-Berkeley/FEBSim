@@ -124,6 +124,7 @@ import matplotlib.pyplot as plt
 
 
 def plot_track(s, kappa):
+    print("HI")
     # Initialize arrays for plotting
     x_pos = np.zeros_like(s)  # x positions
     y_pos = np.zeros_like(s)  # y positions
@@ -149,4 +150,8 @@ def plot_track(s, kappa):
     plt.grid(True)
     plt.show()
 
+<<<<<<< Updated upstream
 plot_track(x, r)
+=======
+plot_track(x, r)
+>>>>>>> Stashed changes
