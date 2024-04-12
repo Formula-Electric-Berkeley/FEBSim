@@ -140,7 +140,7 @@ def plot_track(s, kappa):
 
     # Plot the track
     plt.figure(figsize=(10, 5))
-    plt.plot(x_pos[30:], y_pos[30:], label='Track')
+    plt.plot(x_pos, y_pos, label='Track')
     plt.xlabel('X Position')
     plt.ylabel('Y Position')
     plt.title('Track Plot')

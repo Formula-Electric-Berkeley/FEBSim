@@ -142,6 +142,10 @@ brake_fl = 0.5*0.6
 brake_rl = 0.5*0.4
 brake_rr = 0.5*0.4
 
+'''
+Moment of inertia for the whole car
+'''
+
 Iz      = 5550        # moment of inertiate
 lf      = 1.0         # front wheelbase length
 lr      = 1.2         # rear  wheelbase length
@@ -182,7 +186,7 @@ pi = np.pi
 # Brake Model
 br_pist_a = 0.25*br_nop*pi*(br_pist_d/1000)**2  # [m2]
 br_mast_a = 0.25*pi*(br_mast_d/1000)**2  # [m2]
-beta = tyre_radius/(br_disc_d/2-br_pad_h/2)/br_pist_a/br_pad_mu/4 # [Pa/N] per wheel
+beta = tyre_radius/(br_disc_d/2-br_pad_h/2)/br_pist_a/br_pad_mu/4 # [Pa/N] per wheel; ratio from bps to brake force
 #TODO this is absolutely cursed notation; derive beta later
 #a/b/c = a/(b*c)
 phi = br_mast_a/br_ped_r*2 # [-] for both systems
