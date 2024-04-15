@@ -8,14 +8,16 @@ from scipy.interpolate import interp1d
 
 import matplotlib.pyplot as plt
 
-#Import track and vehicle files like OpenLap
-import track as tr
-import vehicle as veh
+
 
 #Track and vehicle files are located in the respective python scripts
 
 
 def simulate():
+    #Import track and vehicle files like OpenLap (every time we call simulate, reload track and vehicle)
+    import track_files.track as tr
+    import vehicle as veh
+
     # Maximum speed curve
     v_max = np.zeros(tr.n, dtype=np.float32)
     bps_v_max = np.zeros(tr.n, dtype=np.float32)
@@ -25,7 +27,7 @@ def simulate():
         v_max[i], tps_v_max[i], bps_v_max[i] = lap_utils.vehicle_model_lat(veh, tr, i)
     
     # HUD
-    print('Maximum speed calculated at all points.')
+    #print('Maximum speed calculated at all points.')
     
     # Finding apexes
     apex, _ = find_peaks(-v_max)  # Assuming findpeaks is a function that finds peaks in an array
@@ -60,7 +62,14 @@ def simulate():
     apex = apex_table[:, 1]
     
     apex = apex.astype(int)
+    '''
+    OpenAll
+
+    Sweep multiple variables;
+    vary the mass and power cap
+    output the energy consumption and laptime
     
+    '''
     
 
     # Getting driver inputs at apexes
@@ -71,7 +80,6 @@ def simulate():
     
     # Memory preallocation
     N = len(apex)  # Number of apexes
-    print(N)
     flag = np.zeros((tr.n, 2), dtype=bool)  # Flag for checking that speed has been correctly evaluated
     v = np.full((tr.n, N, 2), np.inf, dtype=np.float32)
     ax = np.zeros((tr.n, N, 2), dtype=np.float32)
@@ -93,7 +101,7 @@ def simulate():
                 i_rest = lap_utils.other_points(i, N)
                 # Getting apex index
                 j = int(apex[i])
-                #print("Here j = {}".format(j))
+
                 # Saving speed, latacc, and driver inputs from presolved apex
                 v[j, i, k] = v_apex[i]
                 
@@ -115,7 +123,7 @@ def simulate():
                 while True:
                     # Calculating speed, accelerations, and driver inputs from the vehicle model
                     v[j_next, i, k], ax[j, i, k], ay[j, i, k], tps[j, k], bps[j, k], overshoot = lap_utils.vehicle_model_comb(veh, tr, v[j, i, k], v_max[j_next], j, mode)
-                    #print("j = {} | | v = {}".format(j, v[j_next, i, k]))
+
                     # Checking for limit
                     if overshoot:
                         #print("Overshot")
@@ -142,10 +150,9 @@ def simulate():
                         if j == 1:  # Made it to the start
                             break
 
-    print("Counter: {}".format(counter))
-    print("Skipped: {}".format(skipped))
+    #print("Counter: {}".format(counter))
+    #print("Skipped: {}".format(skipped))
 
-    #print(v[:, 20, 0])
     # preallocation for results
     V = np.zeros(tr.n)
     AX = np.zeros(tr.n)
@@ -177,8 +184,8 @@ def simulate():
         
             
     
-    #print(flag)
     #Below is a useful check to see where the apexes are:
+    '''
     x = []
     xapex = []
     
@@ -197,11 +204,13 @@ def simulate():
     ax.set_title("Velocity Trace")
     
     
-    #print(V)
 
     ax.plot(x, V, color='r', label="Final")
     ax.legend()
     plt.show()
+    '''
+
+
     # laptime calculation    
     dt = np.divide(tr.dx, V)
     time = np.cumsum(dt)
@@ -214,7 +223,7 @@ def simulate():
     
     laptime = time[-1]
     
-    print("Laptime is {}".format(laptime))
+    #print("Laptime is {}".format(laptime))
     
     
     
@@ -273,19 +282,16 @@ def simulate():
     energy_cost_total = number_of_laps*total_work/(3.6*10**6)       # in kWh
     energy_gained_total = number_of_laps*regenerated_energy/(3.6*10**6)   # in kWh
     
-    print("Energy cost is {:.3f} kWh".format(energy_cost_total)) 
-    print("Regenerated Power is {:.3f} kWh".format(energy_gained_total)) 
-    print()
+    #print("Energy cost is {:.3f} kWh".format(energy_cost_total)) 
+    #print("Regenerated Power is {:.3f} kWh".format(energy_gained_total)) 
+    #print()
     
     #veh.plotMotorCurve()
 
+    return laptime, energy_cost_total
 
 
 
-def test():
-    p = 30
-    v_max, tps_v_max, bps_v_max = lap_utils.vehicle_model_lat(veh, tr, p)
-    print(v_max)
 
-simulate()
+#simulate()
 

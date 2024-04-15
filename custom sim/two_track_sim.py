@@ -5,8 +5,7 @@ import numpy as np
 import casadi as ca
 import pandas as pd
 
-import track as tr
-import test_track as tst
+import track_files.track as tr
 import vehicle as veh
 
 #helper functions for casasdi models
@@ -543,7 +542,7 @@ def opt_mintime():
 
                 f_xk = f_x_flk + f_x_frk + f_x_rlk + f_x_rrk
                 f_yk = f_y_flk + f_y_frk + f_y_rlk + f_y_rrk
-                
+
                 # path constraint: longitudinal wheel load transfer assuming Ky = 0 (no pitch)
                 g.append( Uk[3] * gamma_x_s *(veh.lf+veh.lr) + veh.cg_height*f_xk)
                 lbg.append([0.0])

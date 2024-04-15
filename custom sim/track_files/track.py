@@ -23,7 +23,9 @@ mesh_size = 1.25 # [m]
 
 
 # Track excel file selection
+base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\track_files\\"
 filename = 'Michigan 2014.xlsx'
+filename = base_name + filename
 info = read_info(filename,'Shape')
 
 
@@ -149,4 +151,4 @@ def plot_track(s, kappa):
     plt.grid(True)
     plt.show()
 
-plot_track(x, r)
+#plot_track(x, r)
