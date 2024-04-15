@@ -28,13 +28,13 @@ sweepBool = true;
 
 % Variable to sweep. Run OpenLAP and see veh struct for vars available. Only
 % vars that are a single value currently work (no motor curves).
-sweepVar = "factor_power";
+sweepVar = "M";
 
 % Values to sweep var with
-vals2Sweep = 1;
+vals2Sweep = linspace(200, 300, 20);
 
 % Do you want to sweep a second var? Set true if yes
-sweep2 = false;
+sweep2 = true;
 
 % Second var to sweep
 sweepVar2 = "Cd";

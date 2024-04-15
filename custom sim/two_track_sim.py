@@ -5,7 +5,7 @@ import numpy as np
 import casadi as ca
 import pandas as pd
 
-import track_files.track as tr
+import track as tr
 import vehicle as veh
 
 #helper functions for casasdi models
