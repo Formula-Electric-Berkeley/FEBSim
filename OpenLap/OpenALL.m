@@ -24,24 +24,24 @@ vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat' ;
 ptsfile  = 'SN3_Points_Reference.xlsx';
 
 % Do you wish to sweep values? If false, given vehicle values will be used.
-sweepBool = false;
+sweepBool = true;
 
 % Variable to sweep. Run OpenLAP and see veh struct for vars available. Only
 % vars that are a single value currently work (no motor curves).
-sweepVar = "factor_drive";
+sweepVar = "M";
 
 % Values to sweep var with
-vals2Sweep = 1;
+vals2Sweep = linspace(200, 300, 20);
 
 % Do you want to sweep a second var? Set true if yes
 sweep2 = true;
 
 % Second var to sweep
-sweepVar2 = "";
+sweepVar2 = "Cd";
 
 % Values to sweep second var. Use linspace and fill out first two values 
 % (need same length as vals2Sweep
-vals2Sweep2 = -3.5;
+vals2Sweep2 = linspace(0, -1.5, 20);
 
 %% Loading variables
 
@@ -75,6 +75,7 @@ if sweepBool
         [sim_end] = simulate(veh,tr_end);
         tr_end = sim_end.laptime.data;
         e_end = (sim_end.energy.data(end-1)-sim_end.regen.data(end-1));
+        regen_end = sim_end.regen.data(end-1);
 
         [sim_autoX] = simulate(veh,tr_autoX);
         tr_autoX = sim_autoX.laptime.data;
@@ -85,9 +86,12 @@ if sweepBool
         
         e_end = e_end*numLaps;
 
+        regen_end = regen_end*numLaps;
+
         %% Reporting results if single value
         display("Endurance Laptime: " + tr_end + " seconds")
         display("Endurance Energy with Regen: " + e_end + " kWh")
+        display(" Regen: " + regen_end + " kWh")
         display("AutoX Laptime: " + tr_autoX + " seconds")
         display("Acceleration Time: " + accTime + " seconds" + newline)
 
@@ -116,7 +120,7 @@ if sweepBool
             pts  = zeros(length(vals2Sweep),6);
             
             %Run sim for each sweep value and record time and energy
-            for i = 1:length(vals2Sweep); 
+            for i = 1:length(vals2Sweep)
                 veh.(sweepVar) = vals2Sweep(i);
 
                 [sim_end] = simulate(veh,tr_end);
@@ -608,12 +612,12 @@ function [sim] = simulate(veh,tr)
     %% Total 22km Endurance Energy Calcuation
     
     brake_force = BPS*veh.phi;
-    regen_power = min(brake_force.*V,45000);
+    regen_power = min(brake_force.*V,15000);
     
     tr_length = tr.x(end)/1000;
     
     energy = cumtrapz(time, engine_power)*2.77778e-7;
-    regen = cumtrapz(time, regen_power)*2.77778e-7;
+    regen = cumtrapz(time, regen_power)*2.77778e-7
     
     %% saving results in sim structure
     %sim.sim_name.data = simname ;

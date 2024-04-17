@@ -19,7 +19,10 @@ def read_info(workbook_file, sheet_name=1, start_row=2, end_row=10000, cols="B:C
     
     return opts
 
+base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\vehicle_files\\"
 filename = 'FEB_SN3_30kW.xlsx'
+
+filename = base_name + filename
 
 info = read_info(filename,'Info')
 data = read_info(filename,'Torque Curve', cols="A:B")
@@ -142,6 +145,10 @@ brake_fl = 0.5*0.6
 brake_rl = 0.5*0.4
 brake_rr = 0.5*0.4
 
+'''
+Moment of inertia for the whole car
+'''
+
 Iz      = 5550        # moment of inertiate
 lf      = 1.0         # front wheelbase length
 lr      = 1.2         # rear  wheelbase length
@@ -182,7 +189,7 @@ pi = np.pi
 # Brake Model
 br_pist_a = 0.25*br_nop*pi*(br_pist_d/1000)**2  # [m2]
 br_mast_a = 0.25*pi*(br_mast_d/1000)**2  # [m2]
-beta = tyre_radius/(br_disc_d/2-br_pad_h/2)/br_pist_a/br_pad_mu/4 # [Pa/N] per wheel
+beta = tyre_radius/(br_disc_d/2-br_pad_h/2)/br_pist_a/br_pad_mu/4 # [Pa/N] per wheel; ratio from bps to brake force
 #TODO this is absolutely cursed notation; derive beta later
 #a/b/c = a/(b*c)
 phi = br_mast_a/br_ped_r*2 # [-] for both systems
@@ -362,13 +369,54 @@ def plotMotorCurve():
     
     plt.show()
 
-def reload():
-    filename = 'FEB_SN3_30kW.xlsx'
-    
+def reload(filename):
     info = read_info(filename,'Info')
     data = read_info(filename,'Torque Curve', cols="A:B")
     
 #plotMotorCurve()
 #plotGGV()
 
+#Temporary implementation of OpenAll: used for sweeping across multiple masses and motor torque curves
+def soft_reload(new_mass, motor_curve_file):
+    # Change the mass
+    global M
+    M = new_mass
 
+
+    # Import the motor curve 
+    data = read_info(motor_curve_file,'Sheet1', cols="A:B")
+
+    # alter variables directly affected by the motor curve
+    global fx_engine
+    global wheel_torque
+    global vehicle_speed
+    global v_max
+    global v_min
+
+    
+    motor_speeds = data.loc[:, "Variable"] #rpm
+    motor_torques = data.loc[:, "Value"] #Nm
+
+    wheel_speed = motor_speeds/ratio_primary/ratio_gearbox/ratio_final
+    vehicle_speed = wheel_speed*2*pi/60*tyre_radius #The theoretical speed of the vehicle at various torques
+    wheel_torque = motor_torques*ratio_primary*ratio_gearbox*ratio_final*n_primary*n_gearbox*n_final
+
+    v_min = min(vehicle_speed)
+    v_max = max(vehicle_speed)
+
+    # new speed vector for fine meshing
+    dv = 0.5/3.6
+    vehicle_speed_fine = np.linspace(v_min,v_max, (int) ((v_max-v_min)/dv) )
+
+    # engine tractive force
+    engine_force =  wheel_torque/tyre_radius
+    fx_engine = np.interp(vehicle_speed_fine, vehicle_speed, engine_force) #interpolate to our finer mesh
+    vehicle_speed = vehicle_speed_fine #to fix any future dependencies
+
+
+    # adding values for 0 speed to vectors for interpolation purposes at low speeds
+    vehicle_speed = np.insert(vehicle_speed, 0, 0)
+    fx_engine = np.insert(fx_engine, 0, fx_engine[0])
+
+    wheel_torque = fx_engine*tyre_radius
+    
