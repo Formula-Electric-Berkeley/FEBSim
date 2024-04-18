@@ -23,9 +23,7 @@ mesh_size = 1.25 # [m]
 
 
 # Track excel file selection
-base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\track_files\\"
 filename = 'Michigan 2014.xlsx'
-filename = base_name + filename
 info = read_info(filename,'Shape')
 
 
@@ -126,6 +124,7 @@ import matplotlib.pyplot as plt
 
 
 def plot_track(s, kappa):
+    print("HI")
     # Initialize arrays for plotting
     x_pos = np.zeros_like(s)  # x positions
     y_pos = np.zeros_like(s)  # y positions
@@ -151,90 +150,4 @@ def plot_track(s, kappa):
     plt.grid(True)
     plt.show()
 
-#plot_track(x, r)
-
-def reload(trackfile):
-    global x
-    global r
-    global n
-    global dx
-    global bank
-    global incl
-    global factor_grip
-    
-    
-    # Track excel file selection
-    base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\track_files\\"
-    filename = base_name + trackfile
-    info = read_info(filename,'Shape')
-
-
-    #Getting Curvature
-    R = info.loc[:, "Corner Radius"] #0 or NaN on straights, otherwise a float
-    R = np.nan_to_num(R)
-    R = R.astype(float)
-    R[R==0] = np.inf
-
-    n = len(R)
-
-    #Getting type
-    type_tmp = info.loc[:, "Type"]
-    segment_type = np.zeros(n)
-    segment_type[type_tmp == "Straight"] = 0
-    segment_type[type_tmp == "Left"] = 1
-    segment_type[type_tmp == "Right"] = -1
-
-    #Getting Position Data
-    l = info.loc[:, "Length"]
-    L = np.sum(l) #total length
-    X = np.cumsum(l)  # end position of each segment
-    XC = np.cumsum(l) - l / 2  # center position of each segment
-
-    j = 0  # index
-    x = np.zeros(len(X) + len(R)) 
-    r = np.zeros(len(X) + len(R))
-
-    for i in range(len(X)):
-        if R[i] == np.inf:  # end of straight point injection
-            x[j] = X[i] - l[i]
-            x[j + 1] = X[i]
-            j += 2
-        else:  # circular segment 
-            tol = 1e-1
-            x[j] = X[i] - l[i]*(1-tol) #set the curvature at 10% into the curve
-            x[j + 1] = X[i] - l[i]*tol #set the curvature 10% out of the curve
-            r[j] = segment_type[i] / R[i]
-            r[j+1] = segment_type[i] / R[i]
-            j += 2
-
-
-
-    # saving coarse results; these are the values we interpolate to get a mesh
-    unique_indices = np.unique(x, return_index=True)[1]
-    xx = x[unique_indices]
-    rr = r[unique_indices]
-
-
-    # New fine position vector; this is where we mesh the track
-    if np.floor(L) < L:  # check for injecting last point
-        x = np.concatenate([np.arange(0, np.floor(L), mesh_size*finer_mesh_multiplier), [L]])
-    else:
-        x = np.arange(0, np.floor(L), mesh_size*finer_mesh_multiplier)
-
-    # Distance step vector
-    dx = np.diff(x)
-    dx = np.concatenate([dx, [dx[-1]]])
-
-    # Number of mesh points
-    n = len(x)
-
-    # Fine curvature vector; interpolation of unique radii at all unique positions
-    r_func = interp1d(xx, rr, fill_value="extrapolate")
-    r = r_func(x)
-
-    # Fine turn direction vector
-    t = np.sign(r)
-
-    factor_grip = np.ones(n)
-    bank = np.zeros(n)
-    incl = np.zeros(n)
+plot_track(x, r)
