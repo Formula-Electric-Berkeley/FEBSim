@@ -124,7 +124,6 @@ import matplotlib.pyplot as plt
 
 
 def plot_track(s, kappa):
-    print("HI")
     # Initialize arrays for plotting
     x_pos = np.zeros_like(s)  # x positions
     y_pos = np.zeros_like(s)  # y positions
