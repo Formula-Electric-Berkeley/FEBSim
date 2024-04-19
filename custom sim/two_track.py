@@ -8,13 +8,6 @@ import pandas as pd
 import track as tr
 import vehicle as veh
 
-#helper functions for casasdi models
-def smooth_abs(val, eps = 1e-9):
-        return ca.sqrt(val**2 + eps**2)
-
-def smooth_sign(val, eps = 1e-9):
-        return val / smooth_abs(val)
-
 #Define constants
 mu      = 0.75        # coefficient of friction for tires
 # pacejka model
@@ -592,6 +585,37 @@ def opt_mintime():
                 #F_p.append(Uk[1] * torque_drive_s / 10000.0 + Uk[2] * f_brake_s / 10000.0)
 
                 # append outputs, renormalized to their proper size
+
+
+
+                #TODO start here!!!!!!!
+
+                '''
+                # do both of the back wheels need to have the same angular velocity 
+                # there is some difference in slip, but this could be because the velocity projection is different
+                # motor and brake torques are the same, but if grip torques are ever different (i.e. different velocity projection or slip angle), then ws would differ
+                # UNLESS we actively constrain that
+
+                torque_max_motor = f(angular speed of back axle, power cap)
+                torque_commanded - torque_max_motor <= 0
+
+                '''
+
+
+                # ENERGISTICS TODO
+                
+                '''
+                Based on our commanded torque and velocity, we can find where on the motor efficiency curve we are
+                This can determine our regen efficiency
+                We can also add a variable/functional power cap to limit rate of regen
+
+                Energy consumption can come from 
+                '''
+
+
+
+
+
                 x_opt.append(Xk * x_s)
                 u_opt.append(Uk * u_s)
 
