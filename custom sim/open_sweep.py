@@ -577,6 +577,70 @@ def four_by_four_simple(pack_data):
     
 #optimize_accumulator()
 
-possible_packs = [[16, 5, 7], [16, 4, 8]]
+# use our four_by_four method to get nice data
+def four_by_four_test():
+    possible_packs = [[16, 5, 7], [16, 4, 8]]
+    power_caps = [80, 70, 60, 50]
 
-print(wendys_four_by_four(possible_packs[1]))
+    configs = []
+    masses = []
+    capacities = []
+    autoX_times = []
+    autoX_energies = []
+    accel_times = []
+    accel_consumptions = []
+    power_cap1 = []
+    power_cap2 = []
+    dropped_laps = []
+
+    for pack_data in possible_packs:
+        # set up our accumulator
+        pack = accumulator.Pack()
+        pack.pack(pack_data[0], pack_data[1], pack_data[2]) 
+
+        #car mass in kg, no cells, with driver weight 80kg (from SN3 mass spec sheet)
+        base_mass = 172.1+80                 
+
+        cell_mass = pack.get_cell_data()["weight"]/1000    #in kg
+
+        total_car_mass = cell_mass+base_mass
+        pack_name = pack.get_cell_data()["name"]
+
+        autoX_laptime, autoX_energy, accel_time, accel_consumption, j1, j2, dropped_lap = wendys_four_by_four(pack_data)
+        
+        configs.append(pack_name)
+        masses.append(total_car_mass)
+        capacities.append(pack.get_cell_data()["capacity"]/1000)    #in kWh
+        autoX_times.append(autoX_laptime)
+        autoX_energies.append(autoX_energy)
+        accel_times.append(accel_time)
+        accel_consumptions.append(accel_consumption)
+        power_cap1.append(power_caps[j1])
+        power_cap2.append(power_caps[j2])
+        dropped_laps.append(dropped_lap)
+
+
+    # Output everything using Pandas
+    header = ['Pack Config', 'Mass (kg)', 'Capacity (kWh)', 'Power Cap 1 (kW)', 'Power Cap 2 (kW)', 
+              'Dropped Laps', 'Total AutoX Laptime (s)', 'Total AutoX Energy (kWh)', 'Accel Laptime (s)', 'Total Accel Energy (kWh)']
+
+    df0 = np.concatenate((
+    np.vstack(configs), 
+    np.vstack(masses), 
+    np.vstack(capacities),
+    np.vstack(power_cap1), 
+    np.vstack(power_cap2), 
+    np.vstack(dropped_laps),
+    np.vstack(autoX_times), 
+    np.vstack(autoX_energies), 
+    np.vstack(accel_times), 
+    np.vstack(accel_consumptions)), axis=1)
+
+
+    df1 = pd.DataFrame(df0)
+    writer = pd.ExcelWriter('four_by_four0.xlsx', engine='xlsxwriter')
+
+    df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
+    writer.close()
+
+four_by_four_test()
