@@ -302,8 +302,9 @@ def try_drainage(pack_data, motor_power, V, laps_to_try, starting_discharge=0):
 
 def optimize_accumulator():
     #accumulator sweep
-    possible_packs = [[12, 4, 9], [12, 4, 10]] #, [12, 5, 8], [12, 5, 9]]
-    ''', 
+    possible_packs = [[16, 5, 7], [16, 4, 8]]
+
+    '''[[12, 4, 9], [12, 4, 10], [12, 5, 8], [12, 5, 9],
                       [12, 5, 10], [13, 4, 9], [13, 4, 10], [13, 5, 7], 
                       [13, 5, 8], [13, 5, 9], [14, 4, 8], [14, 4, 9], 
                       [14, 4, 10], [14, 5, 7], [14, 5, 8], [14, 5, 9], 
@@ -317,10 +318,10 @@ def optimize_accumulator():
     numLaps = 22
 
     # loop over various motor_curves
-    power_caps = [80, 70, 60, 50, 40, 30, 20] #, 10]
+    power_caps = [80, 70, 60, 50, 40, 30, 20] #, 10] #10 is unrealistic, removed for speed
 
-    # loop over various masses
-    base_mass = 300                 #car mass in kg, no cells
+    #car mass in kg, no cells, with driver weight 80kg (from SN3 mass spec sheet)
+    base_mass = 172.1+80                 
     masses = []
     pack_names = []
 
@@ -440,7 +441,142 @@ def optimize_accumulator():
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
     
-            
+# determines laptime and consumption for 4 runs of autoX, followed by 4 of accel 
+# if unable to finish, drops the power cap and searches for the best solution       
+def wendys_four_by_four(pack_data):
+    # set up our accumulator
+    pack = accumulator.Pack()
+    pack.pack(pack_data[0], pack_data[1], pack_data[2]) 
+
+    #car mass in kg, no cells, with driver weight 80kg (from SN3 mass spec sheet)
+    base_mass = 172.1+80                 
+
+    cell_mass = pack.get_cell_data()["weight"]/1000    #in kg
+
+    total_car_mass = cell_mass+base_mass
+    pack_name = pack.get_cell_data()["name"]
+
+    # set up 4 runs of autoX
+    track.reload('Michigan_2022_AutoX.xlsx')
+    numLaps = 4
+    power_caps = [80, 70, 60, 50]
+    
+
+    # index of power caps at each point
+    j1 = 0
+    j2 = 1
+    dropped_laps = 0            # how many laps do we complete at a lower power cap
+    race_unfinished = True
+    total_laptime = 0
+    total_energy = 0
+
+    second_failure = -1
+    while race_unfinished:
+        # run a simulation with new_mass and the high power cap
+        filename = "motor_curve{}.xlsx".format(power_caps[j1])
+        base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\motor_curves\\"
+        filename = base_name + filename
+        vehicle.soft_reload(total_car_mass, filename) # reload our vehicle to have the new data
+
+        laptime_first, energy_first, motor_power_first, V_first = open_loop.simulate()
+
+        # run a simulation with new_mass and the low power cap
+        filename = "motor_curve{}.xlsx".format(power_caps[j2])
+        base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\motor_curves\\"
+        filename = base_name + filename
+        vehicle.soft_reload(total_car_mass, filename) # reload our vehicle to have the new data
+
+        laptime_second, energy_second, motor_power_second, V_second = open_loop.simulate()
+        
+        # unless we switch, there is no 2nd laptime
+        laptime_second = 0.0
+        
+        # initially, try the whole race at the max power cap; otherwise, drop the power cap
+        first_failure, laptime_first, discharge = try_drainage(pack_data, motor_power_first, V_first, numLaps-dropped_laps)
+        if dropped_laps > 0:
+            second_failure, laptime_second, discharge2 = try_drainage(pack_data, motor_power_second, V_second, dropped_laps, discharge)
+
+        # if we cannot complete the race, drop the power cap sooner
+        if ((first_failure > 1 or second_failure > 1) and dropped_laps < numLaps-2):
+            print("Dropping power cap for another lap")
+            dropped_laps += 1
+        
+        # if we drop for more than numLaps-2 laps, just drop the power cap and reset
+        elif (first_failure > 1 or second_failure > 1):
+            print("Decreasing power cap to {}".format(power_caps[j1+1]))
+            j1 += 1
+            j2 += 1
+            dropped_laps = 0
+
+        # if we just can't finish at all, quit
+        elif ((second_failure > 1) and dropped_laps > 20):
+            # unable to converge; failure
+            print("Unable to converge")
+            j1 = -1
+            j2 = -1
+            dropped_laps = 0
+            break
+
+        # if both legs succeed, we finish the race
+        else:
+            race_unfinished = False
+
+        autoX_laptime = laptime_first+laptime_second
+        autoX_energy = energy_first*(numLaps-dropped_laps)+energy_second*dropped_laps
+
+
+    # account for 75m acceleration event 
+    accel_time, final_speed = lap_utils.simulate_accel(vehicle)
+    # approximate energy consumption as 1/2 m v^2 (assume 100% efficiency) for small consumption
+    accel_consumption = 0.5*total_car_mass * final_speed**2
+    accel_consumption *= numLaps/(3.6*10**6)                        # all 4 laps, in kWh
+
+    # returns: the total laptime for all 4 laps of autoX, all energy consumed in kWh, 
+    # total time for a single 75m accel, total energy consumed during accel
+    # index of first power cap, index of second power cap, number of laps run at second power cap
+    return autoX_laptime, autoX_energy, accel_time, accel_consumption, j1, j2, dropped_laps
+
+# determines laptime and consumption for 4 runs of autoX, followed by 4 of accel        
+def four_by_four_simple(pack_data):
+    # set up our accumulator
+    pack = accumulator.Pack()
+    pack.pack(pack_data[0], pack_data[1], pack_data[2]) 
+
+    #car mass in kg, no cells, with driver weight 80kg (from SN3 mass spec sheet)
+    base_mass = 172.1+80                 
+
+    cell_mass = pack.get_cell_data()["weight"]/1000    #in kg
+
+    total_car_mass = cell_mass+base_mass
+    pack_name = pack.get_cell_data()["name"]
+
+    # set up 4 runs of autoX
+    track.reload('Michigan_2022_AutoX.xlsx')
+    numLaps = 4
+    power_cap = 80
+    
+    filename = "motor_curve{}.xlsx".format(power_cap)
+    base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\motor_curves\\"
+    filename = base_name + filename
+    vehicle.soft_reload(total_car_mass, filename) # reload our vehicle to have the new data
+
+    one_lap_laptime, one_lap_energy, motor_power, V = open_loop.simulate()
+
+    first_failure, autoX_laptime, discharge = try_drainage(pack_data, motor_power, V, numLaps)
+    autoX_energy = one_lap_energy * numLaps
+
+    # account for 75m acceleration event 
+    accel_time, final_speed = lap_utils.simulate_accel(vehicle)
+    # approximate energy consumption as 1/2 m v^2 (assume 100% efficiency) for small consumption
+    accel_consumption = 0.5*total_car_mass * final_speed**2         # single lap, in J
+    accel_consumption *= numLaps/(3.6*10**6)                        # 4 laps, in kWh
+
+    return autoX_laptime, autoX_energy, accel_time, accel_consumption, first_failure
+
 
     
-optimize_accumulator()
+#optimize_accumulator()
+
+possible_packs = [[16, 5, 7], [16, 4, 8]]
+
+print(wendys_four_by_four(possible_packs[1]))

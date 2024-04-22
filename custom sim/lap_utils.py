@@ -309,5 +309,6 @@ def simulate_accel(veh):
         if current_vehicle_position >= 75:
             accelerating = False # stop
 
+    # energy consumption can be estimated from 1/2 m v^2
 
-    return time_elapsed
+    return time_elapsed, current_vehicle_speed

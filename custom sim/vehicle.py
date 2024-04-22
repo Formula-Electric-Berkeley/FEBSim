@@ -418,3 +418,8 @@ def soft_reload(new_mass, motor_curve_file):
 
     wheel_torque = fx_engine*tyre_radius
     
+def motor_efficiency(rpm, torque):
+    # import digitized motor curve
+
+    # interpolate efficiency to given rpm, torque coordinate
+    print("")
