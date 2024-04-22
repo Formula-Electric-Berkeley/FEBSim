@@ -35,7 +35,7 @@ inverter_efficiency = info.loc[:, "Inverter Efficiency"] #0 or NaN on straights,
 inverter_efficiency = np.nan_to_num(inverter_efficiency)
 inverter_efficiency = inverter_efficiency.astype(float)
 
-power_cap = 80 #kW
+power_cap = 10 #kW
 
 power_capped = np.min((peak_power, power_cap*inverter_efficiency*motor_efficiency), axis=0)
 torque_capped = np.divide(power_capped, motor_speed)*1000/(2*np.pi/60)

@@ -9,13 +9,16 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
 #Import track and vehicle files like OpenLap
-import track as tr
-import vehicle as veh
+
+import accumulator
 
 #Track and vehicle files are located in the respective python scripts
 
 
 def simulate():
+    import track as tr
+    import vehicle as veh
+
     # Maximum speed curve
     v_max = np.zeros(tr.n, dtype=np.float32)
     bps_v_max = np.zeros(tr.n, dtype=np.float32)
@@ -179,6 +182,7 @@ def simulate():
     
     #print(flag)
     #Below is a useful check to see where the apexes are:
+    '''
     x = []
     xapex = []
     
@@ -202,6 +206,9 @@ def simulate():
     ax.plot(x, V, color='r', label="Final")
     ax.legend()
     plt.show()
+    '''
+
+    
     # laptime calculation    
     dt = np.divide(tr.dx, V)
     time = np.cumsum(dt)
@@ -259,35 +266,35 @@ def simulate():
     
     regenerated_energy = np.sum(brake_energies)*overall_regen_efficiency #in Joules
 
-    wheel_speed = V/veh.tyre_radius * 60/(2*np.pi)
-    motor_speed = wheel_speed*veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final
+    wheel_speed = V/veh.tyre_radius # wheel speed in radians/second
+    motor_speed = wheel_speed*veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final   # convert to motor speed
+    motor_power = motor_torque * motor_speed #in W
 
-    #Work from the motor is force from the motor * dx integrated over the track
-    total_work = np.trapz(wheel_torque / veh.tyre_radius, x = tr.x)
+    # Replace motor_power and wheel_torque curves with zeros where values are negative
+    motor_power = np.where(motor_power < 0, 0, motor_power)
+    wheel_torque = np.where(wheel_torque < 0, 0, wheel_torque)
+
+    # Work from the motor is force from the motor * dx integrated over the track
+    motor_work = np.trapz(wheel_torque / veh.tyre_radius, x = tr.x)
+
+    # Power of the motor numerically integrated over time in kWh; gives values about 1 kWh larger
+    motor_energy = np.sum(np.multiply(motor_power, dt))
+
+    energy_cost_total = motor_work/(3.6*10**6)                   # in kWh
+    energy_gained_total = regenerated_energy/(3.6*10**6)         # in kWh
     
-    #motor_power = motor_torque * motor_speed #in W
-    #motor_energy_consumed = np.trapz(motor_power, x = time)    #in Joules
-
-
-
-    energy_cost_total = number_of_laps*total_work/(3.6*10**6)       # in kWh
-    energy_gained_total = number_of_laps*regenerated_energy/(3.6*10**6)   # in kWh
+    print("Energy cost is {:.3f} kWh".format(energy_cost_total)) 
+    print("Regenerated Power is {:.3f} kWh".format(energy_gained_total)) 
+    print()
     
-    #print("Energy cost is {:.3f} kWh".format(energy_cost_total)) 
-    #print("Regenerated Power is {:.3f} kWh".format(energy_gained_total)) 
-    #print()
+    energy_drain = energy_cost_total-energy_gained_total
     
-    #veh.plotMotorCurve()
-
-    return laptime, energy_cost_total-energy_gained_total
+    # information open_sweep needs to run accumulator calculations
+    # laptime is for 1 lap, energy data is for the whole 22 laps
+    return laptime, energy_drain, motor_power, V
     
 
 
 
-def test():
-    p = 30
-    v_max, tps_v_max, bps_v_max = lap_utils.vehicle_model_lat(veh, tr, p)
-    print(v_max)
-
-simulate()
+#print(simulate())
 
