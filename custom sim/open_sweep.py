@@ -23,12 +23,9 @@ def read_info(workbook_file, sheet_name=1, start_row=2, end_row=1000, cols="A:B"
     return opts
 
 # estimate the number of points we will get with the car
-def points_estimate(reference_file, numLaps, time_endurance, time_autoX, time_acceleration, energy_endurance): 
-    # Track excel file selection
-    
-    #info = read_info(reference_file,'Sheet1')
-
-    #values = info.loc[:, "Value"]
+def points_estimate(numLaps, time_endurance, time_autoX, time_acceleration, energy_endurance): 
+    # endurance time and energy are for the whole race (22 laps)
+    # autoX and acceleration times are for 1 run
 
     values = [1473.68, 
                46.85, 
@@ -47,16 +44,18 @@ def points_estimate(reference_file, numLaps, time_endurance, time_autoX, time_ac
     efficiency_factor_maximum = values[5]
 
     # Adjust endurance time and energy for number of laps
-    tEnd = time_endurance*numLaps
-    #eEnd = energy_endurance*numLaps # already taken care of
+    #tEnd = time_endurance*numLaps      # already taken care of
+    #eEnd = energy_endurance*numLaps    # already taken care of
+
+    max_endurance_time = 1.45*minimum_endurance_time
 
     # Calculate points for Endurance, Autocross, and Acceleration (from rulebook)
-    ptsEnd = min(250, 250*((minimum_endurance_time*1.45/tEnd)-1)/((minimum_endurance_time*1.45/minimum_endurance_time)-1))
+    ptsEnd = min(250, 250*((max_endurance_time/time_endurance)-1)/((max_endurance_time/minimum_endurance_time)-1))
     ptsAutoX = min(125, 118.5*((minimum_autoX_time*1.45/time_autoX)-1)/((minimum_autoX_time*1.45/minimum_autoX_time)-1) + 6.5)
     ptsAcc = min(100, 95.5*((minimum_acceleration_time*1.5/time_acceleration)-1)/((minimum_acceleration_time*1.5/minimum_acceleration_time)-1) + 4.5)
 
     # Calculate efficiency factor and points
-    effFactor = (minimum_endurance_time/tEnd)*(minimum_energy_endurance/energy_endurance)
+    effFactor = (minimum_endurance_time/time_endurance)*(minimum_energy_endurance/energy_endurance)
     ptsEff = 0.0 #min(100, 100*(effFactor)/(efficiency_factor_maximum))
 
     
@@ -123,8 +122,8 @@ def mass_power_sweep():
             vehicle.soft_reload(new_mass, filename) # reload our vehicle to have the new data
 
             laptime, energy = open_loop.simulate()
-            end_laptimes[i, j] = laptime #3D grapher only likes 2D arrays
-            end_energies[i, j] = energy
+            end_laptimes[i, j] = numLaps*laptime #3D grapher only likes 2D arrays; scale up by numLaps to get whole-race values
+            end_energies[i, j] = numLaps*energy
 
             end_times.append(laptime)
             end_Es.append(energy)
@@ -156,7 +155,7 @@ def mass_power_sweep():
                 accel_laptimes[i, j] = accel_time
 
                 # estimate the points we get with this configuration
-                points = points_estimate(ptsRef_filename, numLaps, end_laptimes[i, j], laptime, accel_time, end_energies[i, j]) #no accel for now
+                points = points_estimate(numLaps, end_laptimes[i, j], laptime, accel_time, end_energies[i, j]) #no accel for now
                 end_points[i, j] = points[0]
                 autoX_points[i, j] = points[1]
                 tot_points[i, j] = points[2]
@@ -269,10 +268,11 @@ def try_drainage(pack_data, motor_power, V, laps_to_try, starting_discharge=0):
     # flag to check if we over-drain our accumulator
     lapFailure = -1      
     for j in range(laps_to_try):
+        # assume the pack is not drained this lap (discharge still carries over)
+        pack.set_drain_error(False)
 
         # modify the laptime due to field-weakening
         for i, power in enumerate(motor_power):
-
             # drain the accumulator by the energy consumed during each time-step
             pack.drain(power, dt[i])
 
@@ -302,7 +302,7 @@ def try_drainage(pack_data, motor_power, V, laps_to_try, starting_discharge=0):
 
 def optimize_accumulator():
     #accumulator sweep
-    possible_packs = [[16, 5, 7], [16, 4, 8]]
+    possible_packs = [[14, 4, 10]]  #[16, 5, 7], [16, 4, 8], 
 
     '''[[12, 4, 9], [12, 4, 10], [12, 5, 8], [12, 5, 9],
                       [12, 5, 10], [13, 4, 9], [13, 4, 10], [13, 5, 7], 
@@ -324,15 +324,18 @@ def optimize_accumulator():
     base_mass = 172.1+80                 
     masses = []
     pack_names = []
+    capacities = []
 
     for pack_dimension in possible_packs:
         series, parallel, segment = pack_dimension
         pack = accumulator.Pack()
         pack.pack(series, parallel, segment)
-        cell_mass = pack.get_cell_data()["weight"]/1000    #in kg
+        cell_data = pack.get_cell_data()
+        cell_mass = cell_data["weight"]/1000    #in kg
 
         masses.append(cell_mass+base_mass)
-        pack_names.append(pack.get_cell_data()["name"])
+        pack_names.append(cell_data["name"])
+        capacities.append(cell_data["capacity"]/1000)       # in kWh
          
 
     #start endurance
@@ -344,6 +347,7 @@ def optimize_accumulator():
     power_cap1 = []
     power_cap2 = []
     switch_point = []
+    
 
 
     # loop over all packs and try to find the fastest laptime that still completes
@@ -355,6 +359,7 @@ def optimize_accumulator():
         race_unfinished = True
         
         second_failure = -1
+        safety_breaker = 0
         
         while race_unfinished:
             # run a simulation with new_mass and the high power cap
@@ -363,8 +368,6 @@ def optimize_accumulator():
             filename = base_name + filename
             vehicle.soft_reload(new_mass, filename) # reload our vehicle to have the new data
 
-            print(new_mass)
-            print(filename)
             laptime_first, energy_first, motor_power_first, V_first = open_loop.simulate()
 
             # run a simulation with new_mass and the low power cap
@@ -383,32 +386,42 @@ def optimize_accumulator():
             if dropped_laps > 0:
                 second_failure, laptime_second, discharge2 = try_drainage(possible_packs[i], motor_power_second, V_second, dropped_laps, discharge)
 
-            # if we cannot complete the race, drop the power cap sooner
-            if ((first_failure > 1 or second_failure > 1) and dropped_laps < 15):
-                print("Dropping power caps")
-                dropped_laps += 6
+            # Drop the power cap one lap before we fail, unless the second leg also fails  
+            # this should always trigger on the first pass through if we fail
+            if (first_failure >= 0 and second_failure < 0):
+                dropped_laps = numLaps - first_failure + 1
+
+            # if we fail on the second leg, we need to drop power cap sooner
+            elif (second_failure >= 0 and dropped_laps < numLaps-2):
+                dropped_laps += 1
             
-            # if we drop for more than 20 laps, just drop the power cap and reset
-            elif (first_failure > 1 or second_failure > 1):
+            # if we still fail after dropping at the start, just drop more
+            elif (second_failure >= 0 or first_failure >= 0):
                 print("Decreasing power cap to {}".format(power_caps[j1+1]))
                 j1 += 1
                 j2 += 1
                 dropped_laps = 0
+                second_failure = -1
 
-            # if we just can't finish at all, quit
-            elif ((second_failure > 1) and dropped_laps > 20):
-                # unable to converge; failure
-                print("Unable to converge")
-                j1 = -1
-                j2 = -1
-                dropped_laps = 0
-                break
+                safety_breaker += 1
+
+                if safety_breaker > 100:
+                    # unable to converge; failure
+                    print("Unable to converge")
+                    j1 = -1
+                    j2 = -1
+                    dropped_laps = 0
+                    break
 
             # if both legs succeed, we finish the race
             else:
                 race_unfinished = False
 
             total_laptime = laptime_first+laptime_second
+            print("First Laptime: {}, Second: {}".format(laptime_first, laptime_second))
+            print("First Discharge: {}, Second: {}".format(discharge, discharge2))
+            print("First Failure: {}, Second: {}; switch point {}".format(first_failure, second_failure, dropped_laps))
+
             total_energy = energy_first*(numLaps-dropped_laps)+energy_second*dropped_laps
 
         # output the optimal laptime / energy and power cap scheme for each pack config
@@ -422,12 +435,13 @@ def optimize_accumulator():
 
         
     # Output everything using Pandas
-    header = ['Pack Config', 'Mass (kg)', 'Power Cap 1 (kW)', 'Power Cap 2 (kW)', 
+    header = ['Pack Config', 'Mass (kg)', 'Capacity (kWh)', 'Power Cap 1 (kW)', 'Power Cap 2 (kW)', 
               'Switch Point', 'Endurance Laptime (s)', 'Endurance Energy (kWh)']
 
     df0 = np.concatenate((
     np.vstack(pack_names), 
     np.vstack(masses), 
+    np.vstack(capacities),
     np.vstack(power_cap1), 
     np.vstack(power_cap2), 
     np.vstack(switch_point), 
@@ -436,7 +450,7 @@ def optimize_accumulator():
 
 
     df1 = pd.DataFrame(df0)
-    writer = pd.ExcelWriter('Sweep_Data_6.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter('accumulator_sims1.xlsx', engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
@@ -507,6 +521,7 @@ def wendys_four_by_four(pack_data):
             j1 += 1
             j2 += 1
             dropped_laps = 0
+            second_failure = -1
 
         # if we just can't finish at all, quit
         elif ((second_failure > 1) and dropped_laps > 20):
@@ -579,7 +594,7 @@ def four_by_four_simple(pack_data):
 
 # use our four_by_four method to get nice data
 def four_by_four_test():
-    possible_packs = [[16, 5, 7], [16, 4, 8]]
+    possible_packs = [[16, 5, 7], [16, 4, 8], [16, 5, 8], [14, 4, 10]]
     power_caps = [80, 70, 60, 50]
 
     configs = []
@@ -638,9 +653,42 @@ def four_by_four_test():
 
 
     df1 = pd.DataFrame(df0)
-    writer = pd.ExcelWriter('four_by_four0.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter('four_by_four1.xlsx', engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
 
-four_by_four_test()
+# use the data from optimize_accumulator and four_by_four_test() to estimate points for the pack
+# make sure the rows are properly --i.e. consistently-- aligned in both files
+def accumulator_points(): 
+    # import our endurance and autoX data
+    four_by_four_filename = 'four_by_four1.xlsx'
+    endurance_filename = 'accumulator_sims0.xlsx'
+
+    four_data = pd.io.excel.read_excel(four_by_four_filename, nrows=100)
+    #four_data.columns = ['Pack Config', 'Mass (kg)', 'Capacity (kWh)', 'Power Cap 1 (kW)', 'Power Cap 2 (kW)', 
+    # 'Dropped Laps', 'Total AutoX Laptime (s)', 'Total AutoX Energy (kWh)', 'Accel Laptime (s)', 'Total Accel Energy (kWh)']
+    
+    endurance_data = pd.io.excel.read_excel(endurance_filename, nrows=100)
+    #endurance_data.columns = ['Pack Config', 'Mass (kg)', 'Capacity (kWh)', 'Power Cap 1 (kW)', 'Power Cap 2 (kW)', 
+    #     'Switch Point', 'Endurance Laptime (s)', 'Endurance Energy (kWh)']
+    
+
+    numLaps = 22
+
+    endurance_times = endurance_data.loc[:, "Endurance Laptime (s)"]
+    endurance_energies = endurance_data.loc[:, "Endurance Energy (kWh)"]
+
+    autoX_times = four_data.loc[:, "Total AutoX Laptime (s)"] / 4         # single-lap laptime; we have 4-lap laptime
+    accel_times = four_data.loc[:, "Accel Laptime (s)"]
+
+    points = []
+    for i in range(len(endurance_times)):
+        points.append(points_estimate(numLaps, endurance_times[i], autoX_times[i], accel_times[i], endurance_energies[i]))
+
+    return points
+
+#four_by_four_test()
+optimize_accumulator()
+
+

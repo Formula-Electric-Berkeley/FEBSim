@@ -28,7 +28,7 @@ def simulate():
         v_max[i], tps_v_max[i], bps_v_max[i] = lap_utils.vehicle_model_lat(veh, tr, i)
     
     # HUD
-    print('Maximum speed calculated at all points.')
+    #print('Maximum speed calculated at all points.')
     
     # Finding apexes
     apex, _ = find_peaks(-v_max)  # Assuming findpeaks is a function that finds peaks in an array
@@ -37,9 +37,10 @@ def simulate():
     
 
     # Setting up standing start for open track configuration
+    # TODO currently unused; we just have closed tracks atm
     if tr.info.config == 'Open':
-        if apex[0] != 1:  # If index 1 is not already an apex
-            apex = np.insert(apex, 0, 1)  # Inject index 1 as apex
+        if apex[0] != 0:  # If our first velocity max is not already an apex
+            apex = np.insert(apex, 0, 1)  # Inject index 0 as apex
             v_apex = np.insert(v_apex, 0, 0)  # Inject standing start
         else:  # Index 1 is already an apex
             v_apex[0] = 0  # Set standing start at index 1
@@ -70,23 +71,20 @@ def simulate():
     tps_apex = tps_v_max[apex]
     bps_apex = bps_v_max[apex]
     
-    
-    
     # Memory preallocation
     N = len(apex)  # Number of apexes
-    print(N)
     flag = np.zeros((tr.n, 2), dtype=bool)  # Flag for checking that speed has been correctly evaluated
     v = np.full((tr.n, N, 2), np.inf, dtype=np.float32)
     ax = np.zeros((tr.n, N, 2), dtype=np.float32)
     ay = np.zeros((tr.n, N, 2), dtype=np.float32)
-    tps = np.zeros((tr.n, N), dtype=np.float32)
-    bps = np.zeros((tr.n, N), dtype=np.float32)
+    tps = np.zeros((tr.n, N, 2), dtype=np.float32)
+    bps = np.zeros((tr.n, N, 2), dtype=np.float32)
     
     counter = 0
     skipped = 0
-    
+
     # Running simulation
-    for k in range(2):  # Mode number
+    for k in range(2):  # Mode number; accel and decel
         mode = 1 if k == 0 else -1
         k_rest = 1 if k == 0 else 0
     
@@ -102,8 +100,12 @@ def simulate():
                 
                 
                 ay[j, i, k] = v_apex[i] ** 2 * tr.r[j]
-                tps[j, :] = tps_apex[i] * np.ones(N)
-                bps[j, :] = bps_apex[i] * np.ones(N)
+                tps[j, :, 0] = np.full(N, tps_apex[i])
+                tps[j, :, 1] = np.full(N, tps_apex[i])
+                
+
+                bps[j, :, 0] = np.full(N, bps_apex[i])
+                bps[j, :, 1] = np.full(N, bps_apex[i])
                 # Setting apex flag
                 flag[j, k] = True
                 # Getting next point index
@@ -117,14 +119,14 @@ def simulate():
     
                 while True:
                     # Calculating speed, accelerations, and driver inputs from the vehicle model
-                    v[j_next, i, k], ax[j, i, k], ay[j, i, k], tps[j, k], bps[j, k], overshoot = lap_utils.vehicle_model_comb(veh, tr, v[j, i, k], v_max[j_next], j, mode)
+                    v[j_next, i, k], ax[j, i, k], ay[j, i, k], tps[j, i, k], bps[j, i, k], overshoot = lap_utils.vehicle_model_comb(veh, tr, v[j, i, k], v_max[j_next], j, mode)
                     #print("j = {} | | v = {}".format(j, v[j_next, i, k]))
                     # Checking for limit
                     if overshoot:
                         #print("Overshot")
                         break
                     # Checking if the point is already solved in the other apex iteration
-                    if flag[j, k]:
+                    if flag[j, k] or flag[j, k_rest]:
                         if np.max(v[j_next, i, k] >= v[j_next, i_rest, k]) or np.max(v[j_next, i, k] > v[j_next, i_rest, k_rest]):
                             skipped += 1
                             break
@@ -145,8 +147,7 @@ def simulate():
                         if j == 1:  # Made it to the start
                             break
 
-    print("Counter: {}".format(counter))
-    print("Skipped: {}".format(skipped))
+
 
     #print(v[:, 20, 0])
     # preallocation for results
@@ -159,27 +160,21 @@ def simulate():
     # solution selection
     for i in range(tr.n):
         IDX = v.shape[1]
-        #min_values = np.min([v[i, :, 0], v[i, :, 1]], axis=0)
-        #idx = np.argmin(min_values)
-        #V[i] = min_values[idx]
         min_values = np.min(v[i, :, :], axis=1)
         idx = np.argmin(min_values)
-    
         V[i] = min_values[idx]
-    
-        if idx <= IDX:  # solved in acceleration
+
+        if idx < IDX:  # Solved in acceleration
             AX[i] = ax[i, idx, 0]
             AY[i] = ay[i, idx, 0]
-            TPS[i] = tps[i, 0]
-            BPS[i] = bps[i, 0]
-        else:  # solved in deceleration
-            AX[i] = ax[i, idx - IDX, 1]
-            AY[i] = ay[i, idx - IDX, 1]
-            TPS[i] = tps[i, 1]
-            BPS[i] = bps[i, 1]
-        
-            
-    
+            TPS[i] = tps[i, idx, 0]
+            BPS[i] = bps[i, idx, 0]
+        else:  # Solved in deceleration
+            AX[i] = ax[i, idx-IDX, 1]
+            AY[i] = ay[i, idx-IDX, 1]
+            TPS[i] = tps[i, idx-IDX, 1]
+            BPS[i] = bps[i, idx-IDX, 1]
+
     #print(flag)
     #Below is a useful check to see where the apexes are:
     '''
@@ -225,12 +220,14 @@ def simulate():
     
     
     
-    #print(TPS)
+    # Remove the final infinite value from V
+    if (V[-1] == np.inf):
+        V[-1] = V[-2]
 
     #Energy Metrics    
-    number_of_laps = 22
+    numLaps = 22
     # Interpolate wheel torque
-    torque_func = interp1d(veh.vehicle_speed, veh.wheel_torque,kind='linear', fill_value='extrapolate')
+    torque_func = interp1d(veh.vehicle_speed, veh.wheel_torque, kind='linear', fill_value='extrapolate')
     #print(V)
     wheel_torque = TPS * torque_func(V)
     motor_torque = wheel_torque / (veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final*veh.n_primary*veh.n_gearbox*veh.n_final)
@@ -262,8 +259,6 @@ def simulate():
             brake_energies.append(energy)
 
     
-
-    
     regenerated_energy = np.sum(brake_energies)*overall_regen_efficiency #in Joules
 
     wheel_speed = V/veh.tyre_radius # wheel speed in radians/second
@@ -274,6 +269,7 @@ def simulate():
     motor_power = np.where(motor_power < 0, 0, motor_power)
     wheel_torque = np.where(wheel_torque < 0, 0, wheel_torque)
 
+    
     # Work from the motor is force from the motor * dx integrated over the track
     motor_work = np.trapz(wheel_torque / veh.tyre_radius, x = tr.x)
 
@@ -282,11 +278,12 @@ def simulate():
 
     energy_cost_total = motor_work/(3.6*10**6)                   # in kWh
     energy_gained_total = regenerated_energy/(3.6*10**6)         # in kWh
-    
-    print("Energy cost is {:.3f} kWh".format(energy_cost_total)) 
-    print("Regenerated Power is {:.3f} kWh".format(energy_gained_total)) 
-    print()
-    
+
+    # we don't want it for open_all, but it would be nice to have the scaled-up energy calcs
+    #print("Energy cost is {:.3f} kWh".format(energy_cost_total*numLaps)) 
+    #print("Regenerated Power is {:.3f} kWh".format(energy_gained_total*numLaps)) 
+    #print()
+
     energy_drain = energy_cost_total-energy_gained_total
     
     # information open_sweep needs to run accumulator calculations
@@ -296,5 +293,4 @@ def simulate():
 
 
 
-#print(simulate())
-
+simulate()

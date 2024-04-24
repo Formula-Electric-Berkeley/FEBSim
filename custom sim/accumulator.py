@@ -159,6 +159,8 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
 
     # update voltage and state of charge of the accumulator as we pull power from it
     def drain(self, power, time_step):
+        # assume we don't have a drain error yet
+        #self.drain_error = False           # if we command a drain of ~0.0, this could be an issue
 
         # use P = IV to get the current through each cell
         total_current = power / self.cell_data["voltage"] #total current through the accumulator
@@ -192,6 +194,9 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
     
     def get_cell_data(self):
         return self.cell_data
+    
+    def set_drain_error(self, boolean):
+        self.drain_error = boolean
 
 def run_stats(series, parallel, segment):
     return Pack().pack(series, parallel, segment)
@@ -213,17 +218,25 @@ def test_pack(series, parallel, segment):
     pack = Pack()
     pack.pack(series, parallel, segment)        # .pack() initializes and resets the accumulator
 
-    for i in range(30):
-        # drain the pack at 30W for 100 seconds
-        pack.drain(30000, 100)
+    energy_to_drain = 6.9373299347852475 # kWh
+    energy_to_drain_per_lap = energy_to_drain/22
+    energy_to_drain_per_lap *= 3.6*10**6 # in Ws per lap
+
+    dt = 55 #average laptime in s
+    lap_power = energy_to_drain_per_lap/dt
+    print(lap_power)
+    for i in range(32):
+        pack.drain(lap_power, dt)
 
         cell_data = pack.get_cell_data()
         # check updated accumulator peak voltage
         print(cell_data["voltage"])
+        print(cell_data["discharge"])
+        print(cell_data["capacity"])
 
     
 
-
+# 14, 4, 10
 #test_pack(16, 5, 8)
 
 
@@ -276,3 +289,4 @@ def highest_v_config():
 This line below finds the configuration with the highest voltage.
 """
 #print(highest_v_config())
+

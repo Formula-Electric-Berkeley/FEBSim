@@ -1,9 +1,42 @@
-%% OpenALL
-% Sweeps a given variable running lap simulations for the specified
-% vehicle and track
+%% OpenLAP Laptime Simulation Project
+%
+% OpenLAP
+%
+% Lap time simulation using a simple point mass model for a racing vehicle.
+% Instructions:
+% 1) Select a vehicle file created by OpenVEHICLE by assigning the full
+%    path to the variable "vehiclefile".
+% 2) Select a track file created by OpenTRACK by assigning the full path to
+%    the variable "trackfile".
+% 3) Select an export frequency in [Hz] by setting the variable "freq" to
+%    the desired value.
+% 4) Run the script.
+% 5) The results will appear on the command window and inside the folder
+%    "OpenLAP Sims". You can choose to include the date and time of each
+%    simulation in the result file name by changing the
+%    "use_date_time_in_name" variable to true.
+%
+% More information can be found in the "OpenLAP Laptime Simulator"
+% videos on YouTube.
+%
+% This software is licensed under the GPL V3 Open Source License.
+%
+% Open Source MATLAB project created by:
+%
+% Michael Halkiopoulos
+% Cranfield University MSc Advanced Motorsport Engineer
+% National Technical University of Athens MEng Mechanical Engineer
+%
+% LinkedIn: https://www.linkedin.com/in/michael-halkiopoulos/
+% email: halkiopoulos_michalis@hotmail.com
+% MATLAB file exchange: https://uk.mathworks.com/matlabcentral/fileexchange/
+% GitHub: https://github.com/mc12027
+%
+% April 2020.
 
 %% Clearing memory
 
+clear
 close all force
 diary('off')
 fclose('all') ;
@@ -12,386 +45,229 @@ fclose('all') ;
 
 tic
 
-%% Inputs
+%% Filenames
 
-% Number of endurance laps (usually 22km / track length rounded to nearest
-% whole number
-numLaps = 21;
+trackfile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2014_Closed_Forward.mat' ;
+vehiclefile = ['OpenVEHICLE Vehicles/OpenVEHICLE_FEB_SN3_30kW_Open Wheel.mat'] ;
 
-endurancefile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2021 End_Closed_Forward.mat' ;
-autoXfile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2022_Open_Forward.mat' ;
-vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_FEB_SN3_30kW_Open Wheel.mat' ;
-ptsfile  = 'SN3_Points_Reference.xlsx';
+%% Loading circuit
 
-% Do you wish to sweep values? If false, given vehicle values will be used.
-sweepBool = false;
+tr = load(trackfile) ;
 
-% Variable to sweep. Run OpenLAP and see veh struct for vars available. Only
-% vars that are a single value currently work (no motor curves).
-sweepVar = "factor_drive";
+%% Loading car
 
-% Values to sweep var with
-vals2Sweep = 0.5;
-
-% Do you want to sweep a second var? Set true if yes
-sweep2 = false;
-
-% Second var to sweep
-sweepVar2 = "";
-
-% Values to sweep second var. Use linspace and fill out first two values 
-% (need same length as vals2Sweep
-vals2Sweep2 = -3.5;
-
-%% Loading variables
-
-tr_end = load(endurancefile);
-tr_autoX = load(autoXfile);
-veh = load(vehiclefile);
-ptsRef = readmatrix(ptsfile);
+veh = load(vehiclefile) ;
 
 %% Export frequency
 
 freq = 50 ; % [Hz]
 
-%% Displaying Car Name
+%% Simulation name
 
-display("Results for: " + veh.name)
-
-%% Running Lap Simulations over variable
-
-% Checking if sweeping desired
-if sweepBool
-
-    % Check whether two sweep one or two variables. 
-    if length(vals2Sweep) == 1 && (length(vals2Sweep2) == 1 || ~sweep2)
-        % Simulating if only single value of variable(s) is given
-        veh.(sweepVar) = vals2Sweep;
-        
-        if(sweep2)
-            veh.(sweepVar2) = vals2Sweep2;
-        end
-    
-        [sim_end] = simulate(veh,tr_end);
-        tr_end = sim_end.laptime.data;
-        e_end = (sim_end.energy.data(end-1)-sim_end.regen.data(end-1));
-
-        [sim_autoX] = simulate(veh,tr_autoX);
-        tr_autoX = sim_autoX.laptime.data;
-
-        accTime = OpenDRAG(veh);
-
-        pts = ptsCalc(ptsRef, numLaps, tr_end, tr_autoX, accTime, e_end);
-        
-        e_end = e_end*numLaps;
-
-        %% Reporting results if single value
-        display("Endurance Laptime: " + tr_end + " seconds")
-        display("Endurance Energy with Regen: " + e_end + " kWh")
-        display("AutoX Laptime: " + tr_autoX + " seconds")
-        display("Acceleration Time: " + accTime + " seconds" + newline)
-
-        display("Endurance points: " + pts(1))
-        display("AutoX points: " + pts(2))
-        display("Acceleration points: " + pts(3))
-        display("Efficiency points: " + pts(4))
-        display("Total Dynamic Points: " + pts(5) + " out of 500 available points")
-        display("Total Points: " + pts(6) + " out of 600 available points *NOTE EFFICIENCY SCORING NOT ACCURATE*")
-
-        display("Total Comp Points: " + (pts(6) + 270) + " out of 1000 available *ASSUMING 2023 FORECASTED RESULTS*")
-    else 
-        % If multiple values given
-
-        % Check whether to sweep one or two variables
-        if ~sweep2
-            % Sweeping one variable
-
-            %Initializing  lap time, and endurance energy vectors
-            tVec_end  = zeros(length(vals2Sweep),1);
-            eVec_end  = zeros(length(vals2Sweep),1);
-            tVec_autoX  = zeros(length(vals2Sweep),1);
-            eVec_autoX  = zeros(length(vals2Sweep),1);
-            tVec_acc = zeros(length(vals2Sweep),1);
-
-            pts  = zeros(length(vals2Sweep),6);
-            
-            %Run sim for each sweep value and record time and energy
-            for i = 1:length(vals2Sweep); 
-                veh.(sweepVar) = vals2Sweep(i);
-
-                [sim_end] = simulate(veh,tr_end);
-                tVec_end(i) = sim_end.laptime.data;
-                eVec_end(i) = sim_end.energy.data(end-1)-sim_end.regen.data(end-1);
-
-                [sim_autoX] = simulate(veh,tr_autoX);
-                tVec_autoX(i) = sim_autoX.laptime.data;
-                eVec_autoX(i) = sim_autoX.energy.data(end-1)-sim_autoX.regen.data(end-1);
-
-                tVec_acc(i) = OpenDRAG(veh);
-
-                pts(i,:) = ptsCalc(ptsRef, numLaps, tVec_end(i), tVec_autoX(i), tVec_acc(i), eVec_end(i));
-            end
-            
-            eVec_end = eVec_end*numLaps;
-
-            %Plot time and erergy versus swept value
-            figure(1);
-            set(gcf, 'Position',  [100, 100, 850, 1000])
-            subplot(3,2,1)
-            plot(vals2Sweep, tVec_end, "O-");
-            title("Endurance Lap Time Vs. Swept " + sweepVar)
-            xlabel(sweepVar)
-            ylabel("Lap Time (s)")
-            grid on;
-            
-            subplot(3,2,2)
-            plot(vals2Sweep, eVec_end, "O-");
-            title("Endurance Energy w/ Regen Vs. Swept " + sweepVar)
-            xlabel(sweepVar)
-            ylabel("End Energy (kWh)")
-            grid on;
-
-            subplot(3,1,2)
-            plot(vals2Sweep, tVec_autoX, "O-");
-            title("AutoX Lap Time Vs. Swept " + sweepVar)
-            xlabel(sweepVar)
-            ylabel("Lap Time (s)")
-            grid on;
-
-            subplot(3,1,3)
-            plot(vals2Sweep, tVec_acc, "O-");
-            title("Acceleration Time Vs. Swept " + sweepVar)
-            xlabel(sweepVar)
-            ylabel("Acc Time (s)")
-            grid on;
-            
-            sgtitle("Times and Energies for: " + veh.name)
-
-            %Point graphs
-            figure(2);
-            set(gcf, 'Position',  [1000, 100, 850, 1000])
-            subplot(4,2,1)
-            plot(vals2Sweep, pts(:,1), "O-");
-            title("Endurance Pts Vs. Swept " + sweepVar)
-            xlabel(sweepVar)
-            ylabel("End Pts")
-            grid on;
-
-            subplot(4,2,3)
-            plot(vals2Sweep, pts(:,2), "O-");
-            title("Autocross Pts Vs. Swept " + sweepVar)
-            xlabel(sweepVar)
-            ylabel("AutoX Pts")
-            grid on;
-
-            subplot(4,2,5)
-            plot(vals2Sweep, pts(:,3), "O-");
-            title("Acceleration Pts Vs. Swept " + sweepVar)
-            xlabel(sweepVar)
-            ylabel("Acc Pts")
-            grid on;
-
-            subplot(4,2,7)
-            plot(vals2Sweep, pts(:,4), "O-");
-            title("Efficiency (*NOT ACCURATE*) Pts Vs. Swept " + sweepVar)
-            xlabel(sweepVar)
-            ylabel("Eff Pts")
-            grid on;
-
-            subplot(4,2,[2;4])
-            plot(vals2Sweep, pts(:,5), "O-");
-            title("End + AutoX + Acc Pts Vs. Swept " + sweepVar)
-            xlabel(sweepVar)
-            ylabel("Dynamic Pts")
-            grid on;
-
-            subplot(4,2,[6;8])
-            plot(vals2Sweep, pts(:,6), "O-");
-            title("End + AutoX + Acc + Eff Pts Vs. Swept " + sweepVar)
-            xlabel(sweepVar)
-            ylabel("All Pts")
-            grid on;
-
-            sgtitle("Points Plots for: " + veh.name)
-        else
-            %Sweeping 2 variables
-            
-            %Initializing End lap time, and endurance energy matrix
-            tVec_end  = zeros(length(vals2Sweep),length(vals2Sweep2));
-            eVec_end  = zeros(length(vals2Sweep),length(vals2Sweep2));
-
-            %Initializing AutoX lap time, and autoX energy matrix
-            tVec_autoX  = zeros(length(vals2Sweep),length(vals2Sweep2));
-            eVec_autoX  = zeros(length(vals2Sweep),length(vals2Sweep2));
-
-            %Intializing acceleration time matrix
-            tVec_acc = zeros(length(vals2Sweep),length(vals2Sweep2));
-
-            %Initializing pts 3D matrix. 
-            pts  = zeros(length(vals2Sweep), length(vals2Sweep2), 6);
-            
-            %Run sim for each sweep value and record time and energy
-            for i = 1:length(vals2Sweep); 
-                for j = 1:length(vals2Sweep2)
-                    veh.(sweepVar) = vals2Sweep(i);
-                    veh.(sweepVar2) = vals2Sweep2(j);
-
-                    [sim_end] = simulate(veh,tr_end);
-                    tVec_end(i,j) = sim_end.laptime.data;
-                    eVec_end(i,j) = sim_end.energy.data(end-1)-sim_end.regen.data(end-1);
-
-                    [sim_autoX] = simulate(veh,tr_autoX);
-                    tVec_autoX(i,j) = sim_autoX.laptime.data;
-                    eVec_autoX(i,j) = sim_autoX.energy.data(end-1)-sim_autoX.regen.data(end-1);
-
-                    accTime = OpenDRAG(veh);
-                    tVec_acc(i,j) = accTime;
-
-                    pts(i,j,:) = ptsCalc(ptsRef, numLaps, tVec_end(i,j), tVec_autoX(i,j), tVec_acc(i,j), eVec_end(i,j));
-                end
-            end
-           
-            eVec_end = eVec_end*numLaps;
-
-            %Plot time and erergy versus swept value
-            figure(1);
-            set(gcf, 'Position',  [100, 100, 850, 1000])
-            subplot(3,2,1)
-            surf(vals2Sweep, vals2Sweep2, tVec_end');
-            title("Endurance Lap Time Vs. Swept " + sweepVar + " and " + sweepVar2)
-            xlabel(sweepVar)
-            ylabel(sweepVar2)
-            zlabel("Lap Time (s)")
-            colorbar
-            
-            subplot(3,2,2)
-            surf(vals2Sweep, vals2Sweep2, eVec_end');
-            title("Endurance Energy w/ Regen Vs. Swept " + sweepVar + " and " + sweepVar2)
-            xlabel(sweepVar)
-            ylabel(sweepVar2)
-            zlabel("End Energy (kWh)")
-            colorbar
-
-            subplot(3,1,2)
-            surf(vals2Sweep, vals2Sweep2, tVec_autoX');
-            title("AutoX Lap Time Vs. Swept " + sweepVar + " and " + sweepVar2)
-            xlabel(sweepVar)
-            ylabel(sweepVar2)
-            zlabel("Lap Time (s)")
-            colorbar
-
-            subplot(3,1,3)
-            surf(vals2Sweep, vals2Sweep2, tVec_acc');
-            title("Acceleration  Time Vs. Swept " + sweepVar + " and " + sweepVar2)
-            xlabel(sweepVar)
-            ylabel(sweepVar2)
-            zlabel("Acc Time (s)")
-            colorbar
-
-            sgtitle("Times and Energies for: " + veh.name)
-
-            %Plot points
-            figure(2);
-            set(gcf, 'Position',  [1000, 100, 850, 1000])
-            subplot(4,2,1)
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,1)');
-            title("Endurance Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
-            xlabel(sweepVar)
-            ylabel(sweepVar2)
-            zlabel("End Pts")
-            grid on;
-            colorbar
-
-            subplot(4,2,3)
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,2)');
-            title("AutoX Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
-            xlabel(sweepVar)
-            ylabel(sweepVar2)
-            zlabel("AutoX Pts")
-            grid on;
-            colorbar
-
-            subplot(4,2,5)
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,3)');
-            title("Acc Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
-            xlabel(sweepVar)
-            ylabel(sweepVar2)
-            zlabel("Acc Pts")
-            grid on;
-            colorbar
-
-            subplot(4,2,7)
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,4)');
-            title("Eff Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
-            xlabel(sweepVar)
-            ylabel(sweepVar2)
-            zlabel("Eff Pts")
-            grid on;
-            colorbar
-
-            subplot(4,2,[2;4])
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,5)');
-            title("End + AutoX + Acc Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
-            xlabel(sweepVar)
-            ylabel(sweepVar2)
-            zlabel("Dynamic Pts")
-            grid on;
-            colorbar
-
-            subplot(4,2,[6;8])
-            surf(vals2Sweep, vals2Sweep2, pts(:,:,6)');
-            title("End + AutoX + Acc + Eff Pts Vs. Swept " + sweepVar + " and " + sweepVar2)
-            xlabel(sweepVar)
-            ylabel(sweepVar2)
-            zlabel("All Pts")
-            grid on;
-            colorbar
-
-            sgtitle("Points Plots for: " + veh.name)
-
-        end
-    end
+use_date_time_in_name = false ;
+if use_date_time_in_name
+    date_time = "_"+datestr(now,'yyyy_mm_dd')+"_"+datestr(now,'HH_MM_SS') ; %#ok<UNRCH>
 else
-    %Simulate car with given vehicle file if sweeping is not desired
-    %(sweepBool = false)
-    [sim_end] = simulate(veh,tr_end);
-    tr_end = sim_end.laptime.data;
-    e_end = sim_end.energy.data(end-1)-sim_end.regen.data(end-1);
+    date_time = "" ;
+end
+simname = "OpenLAP Sims/OpenLAP_"+char(veh.name)+"_"+tr.info.name+date_time ;
+logfile = simname+".log" ;
 
-    [sim_autoX] = simulate(veh,tr_autoX);
-    tr_autoX = sim_autoX.laptime.data;
+%% HUD
 
-    accTime = OpenDRAG(veh);
+[folder_status,folder_msg] = mkdir('OpenLAP Sims') ;
+delete(simname+".log") ;
+logid = fopen(logfile,'w') ;
+disp_logo(logid)
+disp('=================================================')
+disp("Vehicle: "+veh.name)
+disp("Track:   "+tr.info.name)
+disp("Date:    "+datestr(now,'dd/mm/yyyy'))
+disp("Time:    "+datestr(now,'HH:MM:SS'))
+disp('=================================================')
+fprintf(logid,'%s\n','=================================================') ;
+fprintf(logid,'%s\n',"Vehicle: "+veh.name) ;
+fprintf(logid,'%s\n',"Track:   "+tr.info.name) ;
+fprintf(logid,'%s\n',"Date:    "+datestr(now,'dd/mm/yyyy')) ;
+fprintf(logid,'%s\n',"Time:    "+datestr(now,'HH:MM:SS')) ;
+fprintf(logid,'%s\n','=================================================') ;
 
-    pts = ptsCalc(ptsRef, numLaps, tr_end, tr_autoX, accTime, e_end);
-    
-    e_end = e_end*numLaps
+%% Lap Simulation
 
-    %% Reporting results if single value
-    display("Endurance Laptime: " + tr_end + " seconds")
-    display("Endurance Energy with Regen: " + e_end + " kWh")
-    display("AutoX Laptime: " + tr_end + " seconds")
-    display("Acc Time: " + accTime + " seconds")
+[sim] = simulate(veh,tr,simname,logid) ;
 
-    display("Endurance points: " + pts(1))
-    display("AutoX points: " + pts(2))
-    display("Acceleration points: " + pts(3))
-    display("Efficiency points: " + pts(4))
-    display("Total Dynamic Points: " + pts(5) + " out of 500 available points")
-    display("Total Points: " + pts(6) + " out of 600 available points *NOTE EFFICIENCY SCORING NOT ACCURATE*")
+%% Displaying laptime
+
+disp(['Laptime:  ',num2str(sim.laptime.data,'%3.3f'),' [s]'])
+fprintf(logid,'%s','Laptime   : ') ;
+fprintf(logid,'%7.3f',sim.laptime.data) ;
+fprintf(logid,'%s\n',' [s]') ;
+for i=1:max(tr.sector)
+    disp(['Sector ',num2str(i),': ',num2str(sim.sector_time.data(i),'%3.3f'),' [s]'])
+    fprintf(logid,'%s','Sector ') ;
+    fprintf(logid,'%3d',i) ;
+    fprintf(logid,'%s',': ') ;
+    fprintf(logid,'%7.3f',sim.sector_time.data(i)) ;
+    fprintf(logid,'%s\n',' [s]') ;
 end
 
+%% Ploting results
 
+% figure window
+set(0,'units','pixels') ;
+SS = get(0,'screensize') ;
+H = 900-90 ;
+W = 900 ;
+Xpos = floor((SS(3)-W)/2) ;
+Ypos = floor((SS(4)-H)/2) ;
+f = figure('Name','OpenLAP Simulation Results','Position',[Xpos,Ypos,W,H]) ;
+figname = ["OpenLAP: "+char(veh.name)+" @ "+tr.info.name,"Date & Time: "+datestr(now,'yyyy/mm/dd')+" "+datestr(now,'HH:MM:SS')] ;
+sgtitle(figname)
+
+% setting rows & columns
+rows = 7 ;
+cols = 2 ;
+% x axis limits
+xlimit = [tr.x(1),tr.x(end)] ;
+% xlimit = [4000,4500] ;
+% setting legend location
+loc = 'east' ;
+
+% speed
+subplot(rows,cols,[1,2])
+hold on
+plot(tr.x,sim.speed.data*3.6)
+legend({'Speed'},'Location',loc)
+xlabel('Distance [m]')
+xlim(xlimit)
+ylabel('Speed [m/s]')
+ylabel('Speed [km/h]')
+grid on
+
+% elevation and curvature
+subplot(rows,cols,[3,4])
+yyaxis left
+plot(tr.x,tr.Z)
+xlabel('Distance [m]')
+xlim(xlimit)
+ylabel('Elevation [m]')
+grid on
+yyaxis right
+plot(tr.x,tr.r)
+legend({'Elevation','Curvature'},'Location',loc)
+ylabel('Curvature [m^-^1]')
+
+% accelerations
+subplot(rows,cols,[5,6])
+hold on
+plot(tr.x,sim.long_acc.data)
+plot(tr.x,sim.lat_acc.data)
+plot(tr.x,sim.sum_acc.data,'k:')
+legend({'LonAcc','LatAcc','GSum'},'Location',loc)
+xlabel('Distance [m]')
+xlim(xlimit)
+ylabel('Acceleration [m/s^2]')
+grid on
+
+% drive inputs
+subplot(rows,cols,[7,8])
+hold on
+plot(tr.x,sim.throttle.data*100)
+plot(tr.x,sim.brake_pres.data/10^5)
+legend({'tps','bps'},'Location',loc)
+xlabel('Distance [m]')
+xlim(xlimit)
+ylabel('input [%]')
+grid on
+ylim([-10,110])
+
+% steering inputs
+subplot(rows,cols,[9,10])
+hold on
+plot(tr.x,sim.steering.data)
+plot(tr.x,sim.delta.data)
+plot(tr.x,sim.beta.data)
+legend({'Steering wheel','Steering \delta','Vehicle slip angle \beta'},'Location',loc)
+xlabel('Distance [m]')
+xlim(xlimit)
+ylabel('angle [deg]')
+grid on
+
+% ggv circle
+subplot(rows,cols,[11,13])
+hold on
+scatter3(sim.lat_acc.data,sim.long_acc.data,sim.speed.data*3.6,50,'ro','filled','MarkerEdgeColor',[0,0,0])
+surf(veh.GGV(:,:,2),veh.GGV(:,:,1),veh.GGV(:,:,3)*3.6,'EdgeAlpha',0.3,'FaceAlpha',0.8)
+legend('OpenLAP','GGV','Location','northeast')
+xlabel('LatAcc [m/s^2]')
+ylabel('LonAcc [m/s^2]')
+zlabel('Speed [km/h]')
+grid on
+set(gca,'DataAspectRatio',[1 1 3])
+axis tight
+
+% track map
+subplot(rows,cols,[12,14])
+hold on
+scatter(tr.X,tr.Y,5,sim.speed.data*3.6)
+plot(tr.arrow(:,1),tr.arrow(:,2),'k','LineWidth',2)
+legend('Track Map','Location','northeast')
+xlabel('X [m]')
+ylabel('Y [m]')
+colorbar
+grid on
+axis equal
+
+% saving figure
+savefig(simname+".fig")
+
+% HUD
+disp('Plots created and saved.')
+fprintf(logid,'%s\n','Plots created and saved.') ;
+
+%% Report generation
+
+% csv report generation
+%export_report(veh,tr,sim,freq,logid) ;
+% saving .mat file
+%save(simname+".mat",'veh','tr','sim')
+% HUD
+toc
+fprintf(logid,'%s','Elapsed time is: ') ;
+fprintf(logid,'%f',toc) ;
+fprintf(logid,'%s\n',' [s]') ;
+fclose('all') ;
+
+%% Energy Calcuation
+
+time = sim.time.data;
+power = sim.engine_power.data;
+brake_force = sim.brake_force.data;
+speed = sim.speed.data;
+regen_power = min(brake_force.*speed,45000);
+
+tr_length = tr.x(end)/1000;
+
+energy = cumtrapz(time, power)*2.77778e-7*22/tr_length;
+regen = cumtrapz(time, regen_power)*2.77778e-7*22/tr_length;
+
+disp(newline + "Energy Consumed (kWh): " + energy(end-1))
+disp("Energy Regenerated (kWh): " + regen(end))
+disp("Tot Energy Needed (kWh): " + (energy(end-1)-regen(end)))
 
 %% Functions
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [sim] = simulate(veh,tr)
+function [sim] = simulate(veh,tr,simname,logid)
     
     %% initialisation
     
     % solver timer
-    timer_solver_start = tic;
+    timer_solver_start = tic ;
+    
+    % HUD
+    disp('Simulation started.')
+    fprintf(logid,'%s\n','Simulation started.') ;
     
     %% maximum speed curve (assuming pure lateral condition)
     
@@ -401,6 +277,10 @@ function [sim] = simulate(veh,tr)
     for i=1:tr.n
         [v_max(i),tps_v_max(i),bps_v_max(i)] = vehicle_model_lat(veh,tr,i) ;
     end
+    
+    % HUD
+    disp('Maximum speed calculated at all points.')
+    fprintf(logid,'%s\n','Maximum speed calculated at all points.') ;
     
     %% finding apexes
     
@@ -427,6 +307,10 @@ function [sim] = simulate(veh,tr)
     tps_apex = tps_v_max(apex) ;
     bps_apex = bps_v_max(apex) ;
     
+    % HUD
+    disp('Found all apexes on track.')
+    fprintf(logid,'%s\n','Found all apexes on track.') ;
+    
     %% simulation
     
     % memory preallocation
@@ -440,6 +324,20 @@ function [sim] = simulate(veh,tr)
     ay = single(zeros(tr.n,N,2)) ;
     tps = single(zeros(tr.n,N,2)) ;
     bps = single(zeros(tr.n,N,2)) ;
+    
+    % HUD
+    disp('Starting acceleration and deceleration.')
+    fprintf(logid,'%s\n','Starting acceleration and deceleration.') ;
+    prg_size = 30 ;
+    prg_pos = ftell(logid) ;
+    fprintf(['Running: [',repmat(' ',1,prg_size),'] '])
+    fprintf('% 3.0f',0)
+    fprintf(' [%%]')
+    fprintf(logid,'%s',['Running: [',repmat(' ',1,prg_size),'] ']) ;
+    fprintf(logid,'% 3.0f',0) ;
+    fprintf(logid,'%s\n',' [%]') ;
+    fprintf(logid,'________________________________________________\n') ;
+    fprintf(logid,'|_Apex__|_Point_|_Mode__|___x___|___v___|_vmax_|\n') ;
     
     % running simulation
     for i=1:N % apex number
@@ -478,6 +376,8 @@ function [sim] = simulate(veh,tr)
                     [j_next,j] = next_point(j,tr.n,mode,tr.info.config) ;
                 end
                 while 1
+                    % writing to log file
+                    fprintf(logid,'%7d\t%7d\t%7d\t%7.1f\t%7.2f\t%7.2f\n',i,j,k,tr.x(j),v(j,i,k),v_max(j)) ;
                     % calculating speed, accelerations and driver inputs from vehicle model
                     [v(j_next,i,k),ax(j,i,k),ay(j,i,k),tps(j,i,k),bps(j,i,k),overshoot] = vehicle_model_comb(veh,tr,v(j,i,k),v_max(j_next),j,mode) ;
                     % checking for limit
@@ -490,6 +390,8 @@ function [sim] = simulate(veh,tr)
                             break
                         end
                     end
+                    % updating flag and grogress bar
+                    flag = flag_update(flag,j,k,prg_size,logid,prg_pos) ;
                     % moving to next point index
                     [j_next,j] = next_point(j,tr.n,mode,tr.info.config) ;
                     % checking if lap is completed
@@ -500,6 +402,7 @@ function [sim] = simulate(veh,tr)
                             end
                         case 'Open'
                             if j==tr.n % made it to the end
+                                flag = flag_update(flag,j,k,prg_size,logid,prg_pos) ;
                                 break
                             end
                             if j==1 % made it to the start
@@ -510,6 +413,26 @@ function [sim] = simulate(veh,tr)
             end
         end
     end
+    
+    % HUD
+    progress_bar(max(flag,[],2),prg_size,logid,prg_pos) ;
+    fprintf('\n')
+    disp('Velocity profile calculated.')
+    disp(['Solver time is: ',num2str(toc(timer_solver_start)),' [s]']) ;
+    disp('Post-processing initialised.')
+    fprintf(logid,'________________________________________________\n') ;
+    if sum(flag)<size(flag,1)/size(flag,2)
+        fprintf(logid,'%s\n','Velocity profile calculation error.') ;
+        fprintf(logid,'%s\n','Points not calculated.') ;
+        p = (1:tr.n)' ;
+        fprintf(logid,'%d\n',p(min(flag,[],2))) ;
+    else
+        fprintf(logid,'%s\n','Velocity profile calculated successfully.') ;
+    end
+    fprintf(logid,'%s','Solver time is: ') ;
+    fprintf(logid,'%f',toc(timer_solver_start)) ;
+    fprintf(logid,'%s\n',' [s]') ;
+    fprintf(logid,'%s\n','Post-processing initialised.') ;
     
     %% post-processing resutls
     
@@ -536,6 +459,12 @@ function [sim] = simulate(veh,tr)
         end
     end
     
+    % HUD
+    disp('Correct solution selected from modes.')
+    for i=1:10
+        
+    fprintf(logid,'%s\n','Correct solution selected from modes.') ;
+    
     % laptime calculation
     if strcmp(tr.info.config,'Open')
         time = cumsum([tr.dx(2)./V(2);tr.dx(2:end)./V(2:end)]) ;
@@ -547,6 +476,9 @@ function [sim] = simulate(veh,tr)
         sector_time(i) = max(time(tr.sector==i))-min(time(tr.sector==i)) ;
     end
     laptime = time(end) ;
+    % HUD
+    disp('Laptime calculated.')
+    fprintf(logid,'%s\n','Laptime calculated.') ;
     
     % calculating forces
     M = veh.M ;
@@ -557,6 +489,9 @@ function [sim] = simulate(veh,tr)
     Fz_total = Fz_mass+Fz_aero ;
     Fx_aero = 1/2*veh.rho*veh.factor_Cd*veh.Cd*veh.A*V.^2 ;
     Fx_roll = veh.Cr*abs(Fz_total) ;
+    % HUD
+    disp('Forces calculated.')
+    fprintf(logid,'%s\n','Forces calculated.') ;
     
     % calculating yaw motion, vehicle slip angle and steering input
     yaw_rate = V.*tr.r ;
@@ -569,6 +504,13 @@ function [sim] = simulate(veh,tr)
         beta(i) = sol(2) ;
     end
     steer = delta*veh.rack ;
+    % HUD
+    disp('Yaw motion calculated.')
+    disp('Steering angles calculated.')
+    disp('Vehicle slip angles calculated.')
+    fprintf(logid,'%s\n','Yaw motion calculated.') ;
+    fprintf(logid,'%s\n','Steering angles calculated.') ;
+    fprintf(logid,'%s\n','Vehicle slip angles calculated.') ;
     
     % calculating engine metrics
     wheel_torque = TPS.*interp1(veh.vehicle_speed,veh.wheel_torque,V,'linear','extrap') ;
@@ -579,7 +521,9 @@ function [sim] = simulate(veh,tr)
     gear = interp1(veh.vehicle_speed,veh.gear,V,'nearest','extrap') ;
     fuel_cons = cumsum(wheel_torque/veh.tyre_radius.*tr.dx/veh.n_primary/veh.n_gearbox/veh.n_final/veh.n_thermal/veh.fuel_LHV) ;
     fuel_cons_total = fuel_cons(end) ;
-
+    % HUD
+    disp('Engine metrics calculated.')
+    fprintf(logid,'%s\n','Engine metrics calculated.') ;
     
     % calculating kpis
     percent_in_corners = sum(tr.r~=0)/tr.n*100 ;
@@ -604,19 +548,14 @@ function [sim] = simulate(veh,tr)
         sector_v_max(i) = max(V(tr.sector==i)) ;
         sector_v_min(i) = min(V(tr.sector==i)) ;
     end
-
-    %% Total 22km Endurance Energy Calcuation
-    
-    brake_force = BPS*veh.phi;
-    regen_power = min(brake_force.*V,45000);
-    
-    tr_length = tr.x(end)/1000;
-    
-    energy = cumtrapz(time, engine_power)*2.77778e-7;
-    regen = cumtrapz(time, regen_power)*2.77778e-7;
+    % HUD
+    disp('KPIs calculated.')
+    disp('Post-processing finished.')
+    fprintf(logid,'%s\n','KPIs calculated.') ;
+    fprintf(logid,'%s\n','Post-processing finished.') ;
     
     %% saving results in sim structure
-    %sim.sim_name.data = simname ;
+    sim.sim_name.data = simname ;
     sim.distance.data = tr.x ;
     sim.distance.unit = 'm' ;
     sim.time.data = time ;
@@ -727,12 +666,11 @@ function [sim] = simulate(veh,tr)
     sim.sector_v_max.unit = 'm/s' ;
     sim.sector_v_min.data = sector_v_min ;
     sim.sector_v_min.unit = 'm/s' ;
-    sim.energy.data = energy ;
-    sim.energy.unit = 'kWh' ;
-    sim.regen.data = regen ;
-    sim.regen.unit = 'kWh' ;
-
-
+    % HUD
+    disp('Simulation results saved.')
+    disp('Simulation completed.')
+    fprintf(logid,'%s\n','Simulation results saved.') ;
+    fprintf(logid,'%s\n','Simulation completed.') ;
     
 end
 
@@ -1080,6 +1018,7 @@ function [] = disp_logo(logid)
         '       /_/                                       '...
         ] ;
     disp(lg) % command window
+    fprintf(logid,'%s',[lg,repmat(newline,size(lg,1),1)].') ; % log file
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1176,348 +1115,4 @@ function [] = export_report(veh,tr,sim,freq,logid)
     % HUD
     disp('Exported .csv file successfully.')
     fprintf(logid,'%s\n','Exported .csv file successfully.') ;
-end
-
-function accTime = OpenDRAG(veh)
-    %% Simulation settings
-    
-    % date and time in simulation name
-    use_date_time_in_name = false ;
-    % time step
-    dt = 1E-3 ;
-    % maximum simulation time for memory preallocation
-    t_max = 60 ;
-    % acceleration sensitivity for drag limitation
-    ax_sens = 0.05 ; % [m/s2]
-    % speed traps
-    speed_trap = [50;100;150;200;250;300;350]/3.6 ;
-    % track data
-    bank = 0 ;
-    incl = 0 ;
-    
-    %% Vehicle data preprocessing
-    
-    % mass
-    M = veh.M ;
-    % gravity constant
-    g = 9.81 ;
-    % longitudinal tyre coefficients
-    dmx = veh.factor_grip*veh.sens_x ;
-    mux = veh.factor_grip*veh.mu_x ;
-    Nx = veh.mu_x_M*g ;
-    % normal load on all wheels
-    Wz = M*g*cosd(bank)*cosd(incl) ;
-    % induced weight from banking and inclination
-    Wy = M*g*sind(bank) ;
-    Wx = M*g*sind(incl) ;
-    % ratios
-    rf = veh.ratio_final ;
-    rg = veh.ratio_gearbox ;
-    rp = veh.ratio_primary ;
-    % tyre radius
-    Rt = veh.tyre_radius ;
-    % drivetrain efficiency
-    np = veh.n_primary ;
-    ng = veh.n_gearbox ;
-    nf = veh.n_final ;
-    % engine curves
-    rpm_curve = [0;veh.en_speed_curve] ;
-    torque_curve = veh.factor_power*[veh.en_torque_curve(1);veh.en_torque_curve] ;
-    % shift points
-    shift_points = table2array(veh.shifting(:,1)) ;
-    shift_points = [shift_points;veh.en_speed_curve(end)] ;
-    
-    %% Acceleration preprocessing
-    
-    % memory preallocation
-    N = t_max/dt ;
-    T = -ones(N,1) ;
-    X = -ones(N,1) ;
-    V = -ones(N,1) ;
-    A = -ones(N,1) ;
-    RPM = -ones(N,1) ;
-    TPS = -ones(N,1) ;
-    BPS = -ones(N,1) ;
-    GEAR = -ones(N,1) ;
-    MODE = -ones(N,1) ;
-    % initial time
-    t = 0 ;
-    t_start = 0 ;
-    % initial distance
-    x = 0 ;
-    x_start = 0 ;
-    % initial velocity
-    v = 0 ;
-    % initial accelerartion
-    a = 0 ;
-    % initial gears
-    gear = 1 ;
-    gear_prev = 1 ;
-    % shifting condition
-    shifting = false ;
-    % initial rpm
-    rpm = 0 ;
-    % initial tps
-    tps = 0 ;
-    % initial bps
-    bps = 0 ;
-    % initial trap number
-    trap_number = 1 ;
-    % speed trap checking condition
-    check_speed_traps = true ;
-    % iteration number
-    i = 1 ;
-    
-    %% Acceleration
-    
-    while true
-        % saving values
-        MODE(i) = 1 ;
-        T(i) = t ;
-        X(i) = x ;
-        V(i) = v ;
-        A(i) = a ;
-        RPM(i) = rpm ;
-        TPS(i) = tps ;
-        BPS(i) = 0 ;
-        GEAR(i) = gear ;
-        % checking if rpm limiter is on or if out of memory
-        if v>=veh.v_max
-            break
-        elseif i==N
-            % HUD
-            disp(['Did not reach maximum speed at time ',num2str(t),' s'])
-            break
-        end
-        % check if drag limited
-        if tps==1 && ax+ax_drag<=ax_sens
-            break
-        end
-        % checking speed trap
-        if check_speed_traps
-            % checking if current speed is above trap speed
-            if v>=speed_trap(trap_number)
-                % next speed trap
-                trap_number = trap_number+1 ;
-                % checking if speed traps are completed
-                if trap_number>length(speed_trap)
-                    check_speed_traps = false ;
-                end
-            end
-        end
-        % aero forces
-        Aero_Df = 1/2*veh.rho*veh.factor_Cl*veh.Cl*veh.A*v^2 ;
-        Aero_Dr = 1/2*veh.rho*veh.factor_Cd*veh.Cd*veh.A*v^2 ;
-        % rolling resistance
-        Roll_Dr = veh.Cr*(-Aero_Df+Wz) ;
-        % normal load on driven wheels
-        Wd = (veh.factor_drive*Wz+(-veh.factor_aero*Aero_Df))/veh.driven_wheels ;
-        % drag acceleration
-        ax_drag = (Aero_Dr+Roll_Dr+Wx)/M ;
-        % rpm calculation
-        if gear==0 % shifting gears
-            rpm = rf*rg(gear_prev)*rp*v/Rt*60/2/pi ;
-            rpm_shift = shift_points(gear_prev) ;
-        else % gear change finished
-            rpm = rf*rg(gear)*rp*v/Rt*60/2/pi ;
-            rpm_shift = shift_points(gear) ;
-        end
-        % checking for gearshifts
-        if rpm>=rpm_shift && ~shifting % need to change gears
-            if gear==veh.nog % maximum gear number
-                break
-            else % higher gear available
-                % shifting condition
-                shifting = true ;
-                % shift initialisation time
-                t_shift = t ;
-                % zeroing  engine acceleration
-                ax = 0 ;
-                % saving previous gear
-                gear_prev = gear ;
-                % setting gear to neutral for duration of gearshift
-                gear = 0 ;
-            end
-        elseif shifting % currently shifting gears
-            % zeroing  engine acceleration
-            ax = 0 ;
-            % checking if gearshift duration has passed
-            if t-t_shift>veh.shift_time
-                % shifting condition
-                shifting = false ;
-                % next gear
-                gear = gear_prev+1 ;
-            end
-        else % no gearshift
-            % max long acc available from tyres
-            ax_tyre_max_acc = 1/M*(mux+dmx*(Nx-Wd))*Wd*veh.driven_wheels ;
-            % getting power limit from engine
-            engine_torque = interp1(rpm_curve,torque_curve,rpm) ;
-            wheel_torque = engine_torque*rf*rg(gear)*rp*nf*ng*np ;
-            ax_power_limit = 1/M*wheel_torque/Rt ;
-            % final long acc
-            ax = min([ax_power_limit,ax_tyre_max_acc]) ;
-        end
-        % tps
-        tps = ax/ax_power_limit ;
-        % longitudinal acceleration
-        a = ax+ax_drag ;
-        % new position
-        x = x+v*dt+1/2*a*dt^2 ;
-        % new velocity
-        v = v+a*dt ;
-        % new time
-        t = t+dt ;
-        % next iteration
-        i = i+1 ;
-    end
-    i_acc = i ; % saving acceleration index
-    % average acceleration
-    a_acc_ave = v/t ;
-    %disp(['Average acceleration:    ',num2str(a_acc_ave/9.81,'%6.3f'),' [G]'])
-    %disp(['Peak acceleration   :    ',num2str(max(A)/9.81,'%6.3f'),' [G]'])
-    
-    %% Deceleration preprocessing
-    
-    % saving time and position of braking start
-    t_start = t ;
-    x_start = x ;
-    % speed trap condition
-    check_speed_traps = true ;
-    % active braking speed traps
-    speed_trap_decel = speed_trap(speed_trap<=v) ;
-    trap_number = length(speed_trap_decel) ;
-    
-    %% Deceleration
-    
-    while true
-        % saving values
-        MODE(i) = 2 ;
-        T(i) = t ;
-        X(i) = x ;
-        V(i) = v ;
-        A(i) = a ;
-        RPM(i) = rpm ;
-        TPS(i) = 0 ;
-        BPS(i) = bps ;
-        GEAR(i) = gear ;
-        % checking if stopped or if out of memory
-        if v<=0
-            % zeroing speed
-            v = 0 ;
-            break
-        elseif i==N
-            % HUD
-            disp(['Did not stop at time ',num2str(t),' s'])
-            break
-        end
-        % checking speed trap
-        if check_speed_traps
-            % checking if current speed is under trap speed
-            if v<=speed_trap_decel(trap_number)
-                % next speed trap
-                trap_number = trap_number-1 ;
-                % checking if speed traps are completed
-                if trap_number<1
-                    check_speed_traps = false ;
-                end
-            end
-        end
-        % aero forces
-        Aero_Df = 1/2*veh.rho*veh.factor_Cl*veh.Cl*veh.A*v^2 ;
-        Aero_Dr = 1/2*veh.rho*veh.factor_Cd*veh.Cd*veh.A*v^2 ;
-        % rolling resistance
-        Roll_Dr = veh.Cr*(-Aero_Df+Wz) ;
-        % drag acceleration
-        ax_drag = (Aero_Dr+Roll_Dr+Wx)/M ;
-        % gear
-        gear = interp1(veh.vehicle_speed,veh.gear,v) ;
-        % rpm
-        rpm = interp1(veh.vehicle_speed,veh.engine_speed,v) ;
-        % max long dec available from tyres
-        ax_tyre_max_dec = -1/M*(mux+dmx*(Nx-(Wz-Aero_Df)/4))*(Wz-Aero_Df) ;
-        % final long acc
-        ax = ax_tyre_max_dec ;
-        % brake pressure
-        bps = -veh.beta*veh.M*ax ;
-        % longitudinal acceleration
-        a = ax+ax_drag ;
-        % new position
-        x = x+v*dt+1/2*a*dt^2 ;
-        % new velocity
-        v = v+a*dt ;
-        % new time
-        t = t+dt ;
-        % next iteration
-        i = i+1 ;
-    end
-    % average deceleration
-    a_dec_ave = V(i_acc)/(t-t_start) ;
-    %disp(['Average deceleration:    ',num2str(a_dec_ave/9.81,'%6.3f'),' [G]'])
-    %disp(['Peak deceleration   :    ',num2str(-min(A)/9.81,'%6.3f'),' [G]'])
-
-    
-    %% Results compression
-    
-    % getting values to delete
-    to_delete = T==-1 ;
-    % deleting values
-    T(to_delete) = [] ;
-    X(to_delete) = [] ;
-    V(to_delete) = [] ;
-    A(to_delete) = [] ;
-    RPM(to_delete) = [] ;
-    TPS(to_delete) = [] ;
-    BPS(to_delete) = [] ;
-    GEAR(to_delete) = [] ;
-    MODE(to_delete) = [] ;
-    
-
-    
-    %% 75m time
-    
-    %Find index and time at which front of car hits  75m
-    acc_75m_t = T(find(X > 75,1));
-    
-    %Timer starts when car passes line so find time when back of car passes line
-    carlength = 2.250; %(m)
-    acc_headstart_t = T(find(X > carlength,1));
-    
-    accTime = acc_75m_t - acc_headstart_t;
-end
-
-%% Function to calculate points of endurance, autocross, acceleration and efficiency events
-function pts = ptsCalc(ptsRef, numLaps, tEnd, tAutoX, tAcc, eEnd)
-
-    % Reading reference values from ptsRef file
-    tMinEnd = ptsRef(1,2);
-    tMinAutoX = ptsRef(2,2);
-    tMinAcc = ptsRef(3,2);
-    eMinEnd = ptsRef(4,2);
-    eFactorMin = ptsRef(5,2);
-    eFactorMax = ptsRef(6,2);
-
-    % Adjust endurance time and energy for number of laps
-    tEnd = tEnd*numLaps;
-    eEnd = eEnd*numLaps;
-
-    % Calculate points for Endurance, Autocross, and Acceleration (from
-    % rulebook)
-    ptsEnd = min(250, 250*((tMinEnd*1.45/tEnd)-1)/((tMinEnd*1.45/tMinEnd)-1));
-    ptsAutoX = min(125, 118.5*((tMinAutoX*1.45/tAutoX)-1)/((tMinAutoX*1.45/tMinAutoX)-1) + 6.5);
-    ptsAcc = min(100, 95.5*((tMinAcc*1.5/tAcc)-1)/((tMinAcc*1.5/tMinAcc)-1) + 4.5);
-
-    % Calculate efficiency factor and points
-    effFactor = (tMinEnd/tEnd)*(eMinEnd/eEnd);
-    ptsEff = min(100, 100*(effFactor*eFactorMin)/(eFactorMax*eFactorMin));
-
-
-    %Return calculated points
-    pts = [ptsEnd; ptsAutoX; ptsAcc; ptsEff; 0; 0];
-
-    %Sum dynamic points
-    pts(5) = sum(pts(1:3));
-
-    %Sum all points
-    pts(6) = sum(pts(1:4));
 end

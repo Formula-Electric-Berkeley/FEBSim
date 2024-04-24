@@ -1,4 +1,6 @@
 import numpy as np
+from scipy.interpolate import interp1d
+
 g = 9.81
 
 
@@ -74,7 +76,7 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
     # Overshoot acceleration
     ax_max = mode * (v_max_next**2 - v**2) / (2 * dx)
     ax_drag = (Aero_Dr + Roll_Dr + Wx) / M
-    ax_track_limit = ax_max - ax_drag
+    ax_track_limit = ax_max - ax_drag # same as ax_needed in OpenLap
     
     # Current lateral acceleration
     ay = v**2 * r + g * np.sin(np.radians(bank))
@@ -101,9 +103,12 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
     if ax_track_limit >= 0:
         ax_tyre_max = (1 / M) * (mux + dmx * (Nx - Wd)) * Wd * driven_wheels
         ax_tyre = ax_tyre_max * ellipse_multi
-        ax_power_limit = (1 / M) * np.interp(v, veh.vehicle_speed, veh.factor_power * veh.fx_engine)
+        engine_force_func = interp1d(veh.vehicle_speed, veh.factor_power * veh.fx_engine)
+        ax_power_limit = (1 / M) * engine_force_func(v)
         scale = min([ax_tyre, ax_track_limit]) / ax_power_limit
         tps = max([min([1, scale]), 0]) #possible check
+        if tps == 0:
+            print("HERE 1")
         bps = 0
         ax_com = tps * ax_power_limit
     else:
@@ -121,11 +126,11 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
     v_next = np.sqrt(v**2 + 2 * mode * ax * dx)
     #print(v_next)
     
-    if tps > 0 and v / v_next >= 1:
+    if tps > 0 and v / v_next >= 0.999:
         tps = 1
     
     # Checking for overshoot
-    if v_next / v_max_next > 1.0001: #don't compare floats exactly, get a bit of leeway
+    if v_next / v_max_next > 1: 
         #print(v_next, "   ", v_max_next)
         #print("Overshoooot")
         overshoot = True
@@ -161,7 +166,7 @@ def vehicle_model_lat(veh, tr, p):
     # Induced weight from banking and inclination
     Wy = -M * g * np.sin(np.radians(bank))
     Wx = M * g * np.sin(np.radians(incl))
-    
+    '''
     # Z-axis forces
     fz_mass = -M * g
     fz_aero = 0.5 * veh.rho * veh.factor_Cl * veh.Cl * veh.A * veh.vehicle_speed**2
@@ -175,10 +180,11 @@ def vehicle_model_lat(veh, tr, p):
     idx = np.argmin(np.abs(veh.factor_power * veh.fx_engine + fx_aero + fx_roll + Wx))
     v_drag_thres = 0  # [m/s]
     v_drag = veh.vehicle_speed[idx] + v_drag_thres
+    '''
     
     # Speed solution
     if r == 0:  # Straight (limited by engine speed limit or drag)
-        v = min([veh.v_max, v_drag])
+        v = veh.v_max
         tps = 1  # Full throttle
         bps = 0  # 0 brake
     else:  # Corner (may be limited by engine, drag, or cornering ability)
@@ -212,7 +218,8 @@ def vehicle_model_lat(veh, tr, p):
         else:
             raise ValueError(f"Discriminant < 0 at point index: {p}")
         
-        v = min([v, veh.v_max, v_drag])
+        # No drag????
+        v = min([v, veh.v_max])
         
         # Adjusting speed for drag force compensation
         adjust_speed = True
@@ -230,11 +237,12 @@ def vehicle_model_lat(veh, tr, p):
             
             if ax_drag <= 0:
                 ax_tyre_max_acc = 1 / M * (mux + dmx * (Nx - Wd)) * Wd * driven_wheels
-                ax_power_limit = 1 / M * np.interp(v, veh.vehicle_speed, veh.factor_power * veh.fx_engine)
+                engine_force_func = interp1d(veh.vehicle_speed, veh.factor_power * veh.fx_engine)
+                ax_power_limit = 1 / M * engine_force_func(v)
                 ay = ay_max * np.sqrt(1 - (ax_drag / ax_tyre_max_acc)**2)
                 ax_acc = ax_tyre_max_acc * np.sqrt(1 - (ay_needed / ay_max)**2)
                 scale = min([-ax_drag, ax_acc]) / ax_power_limit
-                tps = max([min([1, scale]), 0])
+                tps = max([min([1, scale]), 0])              
                 bps = 0
             else:
                 ax_tyre_max_dec = -1 / M * (mux + dmx * (Nx - (Wz - Aero_Df) / 4)) * (Wz - Aero_Df)
