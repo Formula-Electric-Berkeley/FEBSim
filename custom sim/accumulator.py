@@ -201,6 +201,60 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
 
     # TODO: how do we deal with a discontinuity in the P(t)? This causes a discontinuity in V(t) (usually an unphysical drop)
 
+    # gets dV/dQ at our desired capacity and current
+    def get_derivative(self, capacity, target_current):
+        currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps
+        
+        # calculate the numerical derivative of V with respect to Capacity for each curve
+        derivatives = [p.deriv() for p in self.discharge_polynomials]
+        known_derivatives = []
+
+        for d in derivatives:
+            # Predicted voltage at this capacity from each of the constant-current polynomials 
+            known_derivatives.append(d(capacity))
+        
+
+        derivative_interpolator = interp1d(currents, known_derivatives, kind='cubic', fill_value='extrapolate')
+
+        return derivative_interpolator(target_current)
+
+    # predicts the next-step V(t) given some stimulus P(t) -- effectively numerically integrates V(Q-) for a given dQ-
+    def new_drain(self, power, time_step, last_current=-1):
+        # use P = IV to get the current through each cell
+        total_current = power / self.cell_data["voltage"] #total current through the accumulator
+        current_per_cell = total_current / self.parallel
+
+        # update the energy of the accumulator (in kWh)
+        energy_drained = power*time_step/3600                   # time is in seconds, power is in W  
+        self.cell_data["discharge"] += energy_drained           # in Wh
+
+        # get the capacity (Q) at each cell, assuming all cells drain equally
+        discharge_per_cell = self.cell_data["discharge"] / (self.parallel * self.pack_series)
+
+        # divide by the *cell nominal voltage* to get capacity in mAh; capacity here = total charge depleted from the cell
+        discharge_per_cell = 1000 * self.pack_series * discharge_per_cell / self.cell_data["nom_v"]
+
+        # get dQ-
+        dQ_per_cell = energy_drained / (self.parallel * self.pack_series)                   # in Wh
+        dQ_per_cell = 1000* self.pack_series * dQ_per_cell / self.cell_data["nom_v"]       # in mAh; convert using nominal cell voltage
+
+        # get the differential change in voltage at our I(t) and Q(t) for one cell
+        dV_dQ_cell = self.get_derivative(discharge_per_cell, current_per_cell)
+
+        # update the pack voltage according to the discharge curves; multiply by pack_series to convert to pack dV
+        # V = V0 + dV, where dV = dV/dQ- * dQ-
+        new_voltage = self.cell_data["voltage"] + self.pack_series * dV_dQ_cell*dQ_per_cell
+
+        if new_voltage > self.cell_data["min_v"]:
+            self.cell_data["voltage"] = new_voltage
+        else: 
+            #print("Drain error: cells cannot drop below safe voltage")
+            #self.cell_data["voltage"] = new_voltage
+            # reset the drainage to cancel it out
+            self.cell_data["discharge"] -= energy_drained           # 1-capacity in Wh
+            self.drain_error = True
+
+
     def is_depleted(self):
         return self.drain_error
     
@@ -217,17 +271,10 @@ def run_stats(series, parallel, segment):
 
 
 
-
-"""
-===================
-Run Codes Below
-(or directly cd into the file in terminal and run functions)
-
-Below are a few example lines to run. Uncomment to run.
-===================
-"""
-
+import matplotlib.pyplot as plt
+import numpy as np
 def test_pack(series, parallel, segment):
+    currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps
     pack = Pack()
     pack.pack(series, parallel, segment)        # .pack() initializes and resets the accumulator
 
@@ -237,15 +284,39 @@ def test_pack(series, parallel, segment):
 
     dt = 55 #average laptime in s
     lap_power = energy_to_drain_per_lap/dt
-    print(lap_power)
+    print("Lap Power: {:.2f}".format(lap_power))
+    x = []
+    y_star = []
+
+    
+    cell_data = pack.get_cell_data()
+    print("Capacity: ", cell_data["capacity"])
     for i in range(32):
         pack.drain(lap_power, dt)
 
         cell_data = pack.get_cell_data()
         # check updated accumulator peak voltage
-        print(cell_data["voltage"])
-        print(cell_data["discharge"])
-        print(cell_data["capacity"])
+        y_star.append(cell_data["voltage"])
+        x.append(cell_data["discharge"])
+
+    print("Discharge: ", cell_data["discharge"])
+
+    colors = ['red', 'orange', 'yellow', 'green', 'blue', 'purple']
+    for i, p in enumerate(pack.discharge_polynomials):
+        x = np.asarray(x)
+        x1 = 1000 * x / (pack.cell_data["nom_v"] * pack.parallel)
+        y = p(x1) #convert to discharge per cell 
+        y = y*pack.pack_series
+        plt.scatter(x, y, label='{}'.format(currents[i]), c= colors[i])
+
+
+    plt.scatter(x, y_star, label='Trace')
+    plt.plot(x, y_star)
+    plt.xlabel('Discharge (Wh)')
+    plt.ylabel('Voltage (V)')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
 
     
 

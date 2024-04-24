@@ -271,11 +271,10 @@ def try_drainage(pack_data, motor_power, V, laps_to_try, starting_discharge=0):
         # assume the pack is not drained this lap (discharge still carries over)
         pack.set_drain_error(False)
 
-        last_current = -1
         # modify the laptime due to field-weakening
         for i, power in enumerate(motor_power):
             # drain the accumulator by the energy consumed during each time-step; smoothing included
-            last_current = pack.drain(power, dt[i], last_current)
+            pack.new_drain(power, dt[i])
 
         # calculate the accumulator voltage and base speed at this point 
         cell_data = pack.get_cell_data()
@@ -357,7 +356,7 @@ def optimize_accumulator():
     for i, new_mass in enumerate(masses):        
         # index of power caps at each point
         j1 = 0
-        j2 = 1
+        j2 = 3 #TEMP
         dropped_laps = 0            # how many laps do we complete at a lower power cap
         race_unfinished = True
         
@@ -425,8 +424,9 @@ def optimize_accumulator():
             print("First Laptime: {}, Second: {}".format(laptime_first, laptime_second))
             print("First Discharge: {}, Second: {}".format(discharge, discharge2))
             print("First Power Cap: {}, Second: {}".format(power_caps[j1], power_caps[j2]))
-            print("First Failure: {}, Second: {}; switch point {}".format(first_failure, second_failure, dropped_laps))
+            print("First Failure: {}, Second: {}; dropped laps {}".format(first_failure, second_failure, dropped_laps))
 
+            #TODO we often miss by 2, even when we drop power caps, even when we drop earlier. Consider dropping by 2 power caps in this case
             total_energy = energy_first*(numLaps-dropped_laps)+energy_second*dropped_laps
 
         # output the optimal laptime / energy and power cap scheme for each pack config
@@ -455,7 +455,7 @@ def optimize_accumulator():
 
 
     df1 = pd.DataFrame(df0)
-    writer = pd.ExcelWriter('accumulator_sims4.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter('accumulator_sims5.xlsx', engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
@@ -661,6 +661,8 @@ def four_by_four_test():
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
+
+    return df1
 
 # use the data from optimize_accumulator and four_by_four_test() to estimate points for the pack
 # make sure the rows are properly --i.e. consistently-- aligned in both files
