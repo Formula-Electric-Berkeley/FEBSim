@@ -158,9 +158,10 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
         self.cell_data["discharge"] = discharge_target
 
     # update voltage and state of charge of the accumulator as we pull power from it
-    def drain(self, power, time_step):
+    def drain(self, power, time_step, last_current=-1):
         # assume we don't have a drain error yet
         #self.drain_error = False           # if we command a drain of ~0.0, this could be an issue
+
 
         # use P = IV to get the current through each cell
         total_current = power / self.cell_data["voltage"] #total current through the accumulator
@@ -176,9 +177,16 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
         # divide by the *cell nominal voltage* to get capacity in mAh
         discharge_per_cell = 1000 * self.pack_series * discharge_per_cell / self.cell_data["nom_v"]
 
+        # optional constraint on the rate of change of the current to minimzie effects of discontinuities in P(t)
+        smoothing_bias = 0.3 # how much do we want the previous current to matter?
+        if last_current > 0:
+            target_current = smoothing_bias*last_current + (1-smoothing_bias)*current_per_cell
+        else:
+            target_current = current_per_cell
+
         # update the pack voltage according to the discharge curves
         #print("Discharge: ", discharge_per_cell)
-        new_voltage = self.pack_series * self.get_cell_voltage(discharge_per_cell, current_per_cell)
+        new_voltage = self.pack_series * self.get_cell_voltage(discharge_per_cell, target_current)
         if new_voltage > self.cell_data["min_v"]:
             self.cell_data["voltage"] = new_voltage
         else: 
@@ -188,7 +196,11 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
             self.cell_data["discharge"] -= energy_drained           # 1-capacity in Wh
             self.drain_error = True
 
-        
+        # return the target current to smooth next time
+        return target_current
+
+    # TODO: how do we deal with a discontinuity in the P(t)? This causes a discontinuity in V(t) (usually an unphysical drop)
+
     def is_depleted(self):
         return self.drain_error
     
@@ -197,6 +209,7 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
     
     def set_drain_error(self, boolean):
         self.drain_error = boolean
+
 
 def run_stats(series, parallel, segment):
     return Pack().pack(series, parallel, segment)

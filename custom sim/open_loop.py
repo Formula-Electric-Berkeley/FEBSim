@@ -216,7 +216,7 @@ def simulate():
     
     laptime = time[-1]
     
-    print("Laptime is {}".format(laptime))
+    #print("Laptime is {}".format(laptime))
     
     
     

@@ -271,13 +271,15 @@ def try_drainage(pack_data, motor_power, V, laps_to_try, starting_discharge=0):
         # assume the pack is not drained this lap (discharge still carries over)
         pack.set_drain_error(False)
 
+        last_current = -1
         # modify the laptime due to field-weakening
         for i, power in enumerate(motor_power):
-            # drain the accumulator by the energy consumed during each time-step
-            pack.drain(power, dt[i])
+            # drain the accumulator by the energy consumed during each time-step; smoothing included
+            last_current = pack.drain(power, dt[i], last_current)
 
         # calculate the accumulator voltage and base speed at this point 
-        accumulator_voltage = pack.get_cell_data()["voltage"]
+        cell_data = pack.get_cell_data()
+        accumulator_voltage = cell_data["voltage"]
         base_speed = 60 * accumulator_voltage / (20*np.pi/10.12)
             
         # to account for field-weakening, we cut torque to any rpm above the base speed
@@ -293,8 +295,9 @@ def try_drainage(pack_data, motor_power, V, laps_to_try, starting_discharge=0):
 
         # if we fail midway through a race and want to drop power caps, we need to re-do the lap at the lower power cap
         if pack.is_depleted():
-            #print("Drain Failure on lap {}, try a lower power cap".format(j))
             lapFailure = j
+            print("Drain Failure with discharge {:.2f} of {:.2f}".format(cell_data["discharge"], cell_data["capacity"]))
+
             break
     
     # update the laptime to account for base speed field weakening
@@ -302,7 +305,7 @@ def try_drainage(pack_data, motor_power, V, laps_to_try, starting_discharge=0):
 
 def optimize_accumulator():
     #accumulator sweep
-    possible_packs = [[14, 4, 10]]  #[16, 5, 7], [16, 4, 8], 
+    possible_packs = [[14, 4, 10]] #[[16, 5, 7], [16, 4, 8]] #]  
 
     '''[[12, 4, 9], [12, 4, 10], [12, 5, 8], [12, 5, 9],
                       [12, 5, 10], [13, 4, 9], [13, 4, 10], [13, 5, 7], 
@@ -318,7 +321,7 @@ def optimize_accumulator():
     numLaps = 22
 
     # loop over various motor_curves
-    power_caps = [80, 70, 60, 50, 40, 30, 20] #, 10] #10 is unrealistic, removed for speed
+    power_caps = [60, 50, 40, 30, 20] #[80, 70, 60, , 10] #10 is unrealistic, removed for speed
 
     #car mass in kg, no cells, with driver weight 80kg (from SN3 mass spec sheet)
     base_mass = 172.1+80                 
@@ -339,7 +342,7 @@ def optimize_accumulator():
          
 
     #start endurance
-    track.reload('Michigan 2014.xlsx')
+    track.reload('Michigan_2021_Endurance.xlsx')
 
     # output vectors of the sim for easier output in excel 
     end_times = []
@@ -380,7 +383,8 @@ def optimize_accumulator():
             
             # unless we switch, there is no 2nd laptime
             laptime_second = 0.0
-            
+            discharge2 = 0.0
+
             # initially, try the whole race at the max power cap; otherwise, drop the power cap
             first_failure, laptime_first, discharge = try_drainage(possible_packs[i], motor_power_first, V_first, numLaps-dropped_laps)
             if dropped_laps > 0:
@@ -420,6 +424,7 @@ def optimize_accumulator():
             total_laptime = laptime_first+laptime_second
             print("First Laptime: {}, Second: {}".format(laptime_first, laptime_second))
             print("First Discharge: {}, Second: {}".format(discharge, discharge2))
+            print("First Power Cap: {}, Second: {}".format(power_caps[j1], power_caps[j2]))
             print("First Failure: {}, Second: {}; switch point {}".format(first_failure, second_failure, dropped_laps))
 
             total_energy = energy_first*(numLaps-dropped_laps)+energy_second*dropped_laps
@@ -450,7 +455,7 @@ def optimize_accumulator():
 
 
     df1 = pd.DataFrame(df0)
-    writer = pd.ExcelWriter('accumulator_sims1.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter('accumulator_sims4.xlsx', engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
@@ -590,11 +595,10 @@ def four_by_four_simple(pack_data):
 
 
     
-#optimize_accumulator()
 
 # use our four_by_four method to get nice data
 def four_by_four_test():
-    possible_packs = [[16, 5, 7], [16, 4, 8], [16, 5, 8], [14, 4, 10]]
+    possible_packs = [[16, 5, 7], [16, 4, 8], [14, 4, 10]]
     power_caps = [80, 70, 60, 50]
 
     configs = []
@@ -663,7 +667,7 @@ def four_by_four_test():
 def accumulator_points(): 
     # import our endurance and autoX data
     four_by_four_filename = 'four_by_four1.xlsx'
-    endurance_filename = 'accumulator_sims0.xlsx'
+    endurance_filename = 'accumulator_sims3.xlsx'
 
     four_data = pd.io.excel.read_excel(four_by_four_filename, nrows=100)
     #four_data.columns = ['Pack Config', 'Mass (kg)', 'Capacity (kWh)', 'Power Cap 1 (kW)', 'Power Cap 2 (kW)', 
@@ -690,5 +694,7 @@ def accumulator_points():
 
 #four_by_four_test()
 optimize_accumulator()
+
+#print(accumulator_points())
 
 

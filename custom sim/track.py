@@ -26,8 +26,8 @@ mesh_size = 0.25 # [m]
 # Track excel file selection
 base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\track_files\\"
 
-filename = 'Michigan 2014.xlsx'
-#filename = 'Michigan_2021_Endurance.xlsx'
+#filename = 'Michigan 2014.xlsx'
+filename = 'Michigan_2021_Endurance.xlsx'
 
 
 filename = base_name + filename
@@ -140,6 +140,7 @@ def reload(trackfile):
     R = np.nan_to_num(R)
     R = R.astype(float)
     R[R==0] = np.inf
+    n = len(R)
 
     #Getting type
     type_tmp = info.loc[:, "Type"]
