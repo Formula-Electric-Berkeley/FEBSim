@@ -24,13 +24,7 @@ mesh_size = 0.25 # [m]
 
 
 # Track excel file selection
-base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\track_files\\"
-
-#filename = 'Michigan 2014.xlsx'
-filename = 'Michigan_2021_Endurance.xlsx'
-
-
-filename = base_name + filename
+filename = 'tracks/Michigan 2014.xlsx'
 info = read_info(filename,'Shape')
 
 

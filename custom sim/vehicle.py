@@ -8,8 +8,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-
 def read_info(workbook_file, sheet_name=1, start_row=2, end_row=10000, cols="B:C"):
     # Setup the Import Options
     opts = pd.io.excel.read_excel(workbook_file, sheet_name, header=None, skiprows=start_row-1, nrows=end_row-start_row+1, usecols=cols)
@@ -19,17 +17,31 @@ def read_info(workbook_file, sheet_name=1, start_row=2, end_row=10000, cols="B:C
     
     return opts
 
-base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\vehicle_files\\"
+# TODO: MOVE THIS TO SOME PLACE THAT MAKES SENSE
+power_cap = 80 # kW
 
-filename = 'FEB_SN3_30kW.xlsx'
-filename = base_name + filename
+motor_data_file = "motor_curves/raw_curves.csv"
+motor_data = pd.read_csv(motor_data_file)
+# TODO: Do interpolation or something for motor efficiency
+motor_efficiency = np.median(motor_data["Motor Efficiency"])
+inverter_efficiency = np.median(motor_data["Inverter Efficiency"])
+max_raw_torque = np.max(motor_data["Original Peak Torque (Nm)"])
+
+def get_torque(rpm):
+    '''
+    RPM - Current rpm of the motor; 
+    Function returns torque that can be applied
+    '''
+    cap = power_cap * 1000 # kW -> W
+    angular_velocity = (rpm * 2 * np.pi) / 60 # rpm -> rad/s
+    f = (cap * inverter_efficiency * motor_efficiency) / angular_velocity
+    g = max_raw_torque
+    return min(f, g)
+
+filename = 'Vehicles/FEB_SN3_30kW.xlsx'
+
 info = read_info(filename,'Info')
 data = read_info(filename,'Torque Curve', cols="A:B")
-
-#print(data)
-
-
-#print(info)
 
 i = 2
 
@@ -64,7 +76,6 @@ A = info.at[(i, "Value")]
 i += 1
 rho = info.at[(i, "Value")]
 i += 1
-
 
 # brakes
 br_disc_d = info.at[(i, "Value")]/1000
@@ -239,7 +250,6 @@ engine_torque = wheel_torque/(ratio_final*ratio_gearbox*ratio_primary*n_primary*
 # engine power
 engine_power = engine_torque*engine_speed*2*pi/60
 
-
 # Force model
 
 # gravitational constant
@@ -268,9 +278,6 @@ fz_tyre = (factor_drive*fz_mass+factor_aero*fz_aero)/driven_wheels
 fx_aero = 1/2*rho*factor_Cd*Cd*A*vehicle_speed**2
 fx_roll = Cr*abs(fz_total)
 fx_tyre = driven_wheels*(mu_x+sens_x*(mu_x_M*g-abs(fz_tyre)))*abs(fz_tyre)
-
-
-
 
 # GGV Map
 
@@ -367,7 +374,7 @@ def plotMotorCurve():
     plt.show()
 
 def reload():
-    filename = 'FEB_SN3_30kW.xlsx'
+    filename = 'Vehicles/FEB_SN3_30kW.xlsx'
     
     info = read_info(filename,'Info')
     data = read_info(filename,'Torque Curve', cols="A:B")
