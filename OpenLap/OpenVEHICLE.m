@@ -38,7 +38,7 @@ fclose('all') ;
 
 %% Vehicle file selection
 
-filename = 'SN3_60A.xlsx' ;
+filename = 'FEB_SN3_30kW.xlsx' ;
 
 %% Reading vehicle file
 

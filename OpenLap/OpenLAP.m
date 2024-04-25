@@ -47,8 +47,8 @@ tic
 
 %% Filenames
 
-trackfile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2021 End_Closed_Forward.mat' ;
-vehiclefile = ['OpenVEHICLE Vehicles/OpenVEHICLE_SN3_60A_Open Wheel.mat'] ;
+trackfile = 'OpenTRACK Tracks/OpenTRACK_Michigan 2014_Closed_Forward.mat' ;
+vehiclefile = ['OpenVEHICLE Vehicles/OpenVEHICLE_FEB_SN3_30kW_Open Wheel.mat'] ;
 
 %% Loading circuit
 
@@ -458,8 +458,10 @@ function [sim] = simulate(veh,tr,simname,logid)
             BPS(i) = bps(i,idx-IDX,2) ;
         end
     end
+    
     % HUD
     disp('Correct solution selected from modes.')
+    disp("S: " + sum(TPS == 0))
     fprintf(logid,'%s\n','Correct solution selected from modes.') ;
     
     % laptime calculation
