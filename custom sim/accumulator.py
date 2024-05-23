@@ -219,7 +219,7 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
         return derivative_interpolator(target_current)
 
     # predicts the next-step V(t) given some stimulus P(t) -- effectively numerically integrates V(Q-) for a given dQ-
-    def new_drain(self, power, time_step, last_current=-1):
+    def new_drain(self, power, time_step):
         # use P = IV to get the current through each cell
         total_current = power / self.cell_data["voltage"] #total current through the accumulator
         current_per_cell = total_current / self.parallel
@@ -263,6 +263,13 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
     
     def set_drain_error(self, boolean):
         self.drain_error = boolean
+
+    # reload the pack to its initial state (i.e. reset discharge, voltage, and drain_error)
+    def reset(self):
+        self.set_discharge(0)
+        self.cell_data["voltage"] = self.cell_data["max_v"]  
+        self.drain_error = False
+
 
 
 def run_stats(series, parallel, segment):

@@ -5,17 +5,20 @@ import numpy as np
 import lap_utils
 from scipy.signal import find_peaks
 from scipy.interpolate import interp1d
+import pandas as pd
 
 import matplotlib.pyplot as plt
 
-#Import track and vehicle files like OpenLap
 
+# import our accumulator and motor models
 import accumulator
+import motor_model
+motor = motor_model.motor()
 
-#Track and vehicle files are located in the respective python scripts
 
 
-def simulate():
+def simulate(pack):
+    #Import track and vehicle files like OpenLap
     import track as tr
     import vehicle as veh
 
@@ -224,8 +227,6 @@ def simulate():
     if (V[-1] == np.inf):
         V[-1] = V[-2]
 
-    #Energy Metrics    
-    numLaps = 22
     # Interpolate wheel torque
     torque_func = interp1d(veh.vehicle_speed, veh.wheel_torque, kind='linear', fill_value='extrapolate')
     #print(V)
@@ -288,9 +289,129 @@ def simulate():
     
     # information open_sweep needs to run accumulator calculations
     # laptime is for 1 lap, energy data is for the whole 22 laps
-    return laptime, energy_drain, motor_power, V
+
+
+    # Quasi-transient accumulator calculations
+    
+    # leave the option to not simulate with the pack
+    pack_voltage = []
+    pack_discharge = []
+    base_speeds = []
+    kvs = []
+    mot_powers = []
+    motor_currents = []
+
+    for i, power in enumerate(motor_power):
+        # drain the accumulator by the energy consumed during each time-step; smoothing included
+        pack.new_drain(power, dt[i])
+        cell_data = pack.get_cell_data()
+
+        accumulator_voltage = cell_data["voltage"]
+        pack_voltage.append(accumulator_voltage)
+        pack_discharge.append(cell_data["discharge"])
+        basespeed, kv_est = motor.calculate_base_speed(accumulator_voltage, power)
+        mot_powers.append(power)
+        base_speeds.append(basespeed)
+        kvs.append(kv_est)
+        motor_currents.append(motor.calculate_Iq_current(motor_torque[i]))
+
+        # Adjust our velocity and laptime according to base speed limitations   
+        # Effectively, reduce our maximum speed to the base speed at every point
+        # TODO; this means we have to re-drain according to the new dt, but let's ignore that for now
+        
+        V[i] = min(V[i], basespeed)
+
+    # re-calculate laptime with base speed limitation    
+    dt = np.divide(tr.dx, V)
+    time = np.cumsum(dt)
+    laptime = time[-1]
+
+
+    '''
+    To optimize this properly, we should drain the accumulator after each point, then optimize accordingly
+    Right now, we just look back at the lap, drain the accumulator, and adjust the speed/laptime "transiently" after we solve everything
+    '''
+    
+            
+
+
+
+    # Output all the data in a readable csv
+
+    header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)', 
+              'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Kv', 'Motor Power (W)', 'Iq Current (A)']
+    transient_output = pd.DataFrame(data=zip(time, V, motor_torque, brake_force, pack_voltage, pack_discharge, base_speeds, kvs, mot_powers, motor_currents), columns=header)
     
 
 
 
-simulate()
+    return laptime, energy_drain, transient_output
+    
+
+
+# Simulate 22 laps of endurance
+def simulate_endurance(pack, numLaps):
+    laptime0, energistics0, output_df = simulate(pack)
+
+    laptimes = [laptime0]
+    energy_drains = [energistics0]              #total energy drained from the accumulator (estimate)
+    pack_failure = [pack.is_depleted()]         #check if the pack is depleted
+
+    for lap in range(numLaps-1):
+        laptime, energy_drain, output_df_prime = simulate(pack)
+        laptimes.append(laptime)
+        energy_drains.append(energy_drain)
+        pack_failure.append(pack.is_depleted())
+        output_df = pd.concat([output_df, output_df_prime])
+
+    
+    basic_header = ['Laptimes (s)', 'Energy Drains (kWh)', 'Pack Failure']
+    basic_output = pd.DataFrame(data=zip(laptimes, energy_drains, pack_failure), columns=basic_header)
+
+    header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)', 
+              'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Kv', 'Motor Power (W)', 'Iq Current (A)']
+
+    writer = pd.ExcelWriter('open_loop_out1.xlsx', engine='xlsxwriter')
+
+    output_df.to_excel(writer, sheet_name='Main Output', index=False, header=header)
+    basic_output.to_excel(writer, sheet_name='Basic Output', index=False, header=basic_header)
+
+    writer.close()
+    
+
+    # compile the basic outputs for optimization
+    # THE DISCREPANCY WE SAW BETWEEN ACCUMULATOR DRAINAGE AND OPENLAP DRAINAGE IS BC OF REGEN
+    total_time = np.sum(laptimes)
+    total_energy_drain = np.sum(energy_drains)
+    pack_failed = pack_failure[-1]
+
+
+    return total_time, total_energy_drain, pack_failed
+
+
+
+def simulate_pack(pack_data):
+    pack = accumulator.Pack()
+    pack.pack(pack_data[0], pack_data[1], pack_data[2]) 
+    laptime, energy_drain, transient_output = simulate(pack)
+
+    file_name = f"openloop_out.csv"
+    transient_output.to_csv(file_name, sep=',', encoding='utf-8', index=False)
+
+
+#pack = accumulator.Pack()
+#pack.pack(14, 4, 10) 
+
+#simulate_endurance(pack, 22)
+
+
+# RIT Actual
+# 4.903 kWh
+# 73.467
+
+# RIT Predicted
+# 8.3002 kWh
+# 73.57
+
+# Scale factor: 4.903 / 8.3002
+# 0.590709

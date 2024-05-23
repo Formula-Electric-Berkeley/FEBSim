@@ -8,6 +8,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+import motor_model
+motor = motor_model.motor()
+
 def read_info(workbook_file, sheet_name=1, start_row=2, end_row=10000, cols="B:C"):
     # Setup the Import Options
     opts = pd.io.excel.read_excel(workbook_file, sheet_name, header=None, skiprows=start_row-1, nrows=end_row-start_row+1, usecols=cols)
@@ -38,7 +41,7 @@ def get_torque(rpm):
     g = max_raw_torque
     return min(f, g)
 
-filename = 'Vehicles/FEB_SN3_30kW.xlsx'
+filename = 'vehicle_files/FEB_SN3_30kW.xlsx'
 
 info = read_info(filename,'Info')
 data = read_info(filename,'Torque Curve', cols="A:B")
@@ -384,14 +387,21 @@ def reload():
 
 
 #Temporary implementation of OpenAll: used for sweeping across multiple masses and motor torque curves
-def soft_reload(new_mass, motor_curve_file):
+#
+def soft_reload(new_mass, power_cap, new_aero=[]):
     # Change the mass
     global M
     M = new_mass
 
+    global Cl, Cd
+    # Change the aero
+    if len(new_aero) > 1:
+        Cl = new_aero[0]
+        Cd = new_aero[1]
+
 
     # Import the motor curve 
-    data = read_info(motor_curve_file,'Sheet1', cols="A:B")
+    motor_speeds, motor_torques = motor.get_motor_curve(power_cap) #rpm, Nm
 
     # alter variables directly affected by the motor curve
     global fx_engine
@@ -400,9 +410,6 @@ def soft_reload(new_mass, motor_curve_file):
     global v_max
     global v_min
 
-    
-    motor_speeds = data.loc[:, "Variable"] #rpm
-    motor_torques = data.loc[:, "Value"] #Nm
 
     wheel_speed = motor_speeds/ratio_primary/ratio_gearbox/ratio_final
     vehicle_speed = wheel_speed*2*pi/60*tyre_radius #The theoretical speed of the vehicle at various torques

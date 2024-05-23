@@ -107,8 +107,6 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
         ax_power_limit = (1 / M) * engine_force_func(v)
         scale = min([ax_tyre, ax_track_limit]) / ax_power_limit
         tps = max([min([1, scale]), 0]) #possible check
-        if tps == 0:
-            print("HERE 1")
         bps = 0
         ax_com = tps * ax_power_limit
     else:
@@ -320,3 +318,6 @@ def simulate_accel(veh):
     # energy consumption can be estimated from 1/2 m v^2
 
     return time_elapsed, current_vehicle_speed
+
+
+    
