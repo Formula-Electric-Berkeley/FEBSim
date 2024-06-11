@@ -13,6 +13,44 @@ from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 import lap_utils
 
+# predict our efficiency factor and score from the average laptime and energy drain
+def calculate_efficiency_factor(avg_laptime, energy_drain):
+    # assume LapTotal min, yours, and CO2 are all the same (22)
+    t_min = 67.667
+    t_max = 98.118
+    co2_min = 0.0518                            # avg kg CO2 per lap
+    eff_factor_min = 0.0591
+    eff_factor_max = 0.841
+
+    
+    # predict RIT's efficiency factor
+    '''
+    t_yours = 73.467
+    e_yours = 4.903                             # kWh
+    co2_yours = e_yours * 0.65
+    co2_yours = co2_yours / 22                  # avg adjusted kg CO2 per lap
+    RIT_factor = t_min/t_yours * co2_min / co2_yours
+    RIT_score = 100 * (RIT_factor-eff_factor_min)/(eff_factor_max-eff_factor_min)
+
+    print(RIT_factor)
+    print(RIT_score)
+    print(eff_factor_min)
+    '''
+    
+    # predict our efficiency factor
+    co2_yours = energy_drain * 0.65
+    co2_yours = co2_yours / 22                  # avg adjusted kg CO2 per lap
+    eff_factor = t_min/avg_laptime * co2_min / co2_yours
+
+
+    #linear score approximator from eff_factor
+    m = (100-81.3)/(0.841-0.243)
+    Points = 89.9+m*(eff_factor-0.362)
+    #print(Points)
+
+    return eff_factor, Points
+
+
 # estimate the number of points we will get with the car
 def points_estimate(numLaps, time_endurance, energy_endurance, time_autoX, time_acceleration): 
     # endurance time and energy are for the whole race (22 laps)
@@ -68,7 +106,7 @@ def points_estimate(numLaps, time_endurance, energy_endurance, time_autoX, time_
     ptsEff = efficiency_score_2023
 
     # Return calculated points
-    pts = [ptsEnd, ptsAutoX, ptsEff, ptsAcc, 0]
+    pts = [ptsEnd, ptsAutoX, ptsAcc, ptsEff, 0]
 
     ptsTot = np.sum(pts)
 
@@ -321,6 +359,7 @@ def optimize_endurance(endurance_trackfile, possible_packs, power_caps, numLaps,
         end_Es.append(energy)
         power_cap1.append(power_caps[j1])        
 
+    # verticalize and concatenate all our vectors
     df0 = np.concatenate((
     np.vstack(pack_names), 
     np.vstack(masses), 

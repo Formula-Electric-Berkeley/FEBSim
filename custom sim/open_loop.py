@@ -180,7 +180,7 @@ def simulate(pack):
 
     #print(flag)
     #Below is a useful check to see where the apexes are:
-    '''
+    
     x = []
     xapex = []
     
@@ -191,8 +191,8 @@ def simulate(pack):
             xapex.append(i)
 
     ax = plt.axes()
-    ax.plot(x, v_max, label="Max")
-    ax.plot(x, tr.r*50, label="1/Radius (arb.)")
+    #ax.plot(x, v_max, label="Max")
+    #ax.plot(x, tr.r*50, label="1/Radius (arb.)")
     ax.scatter(xapex, old_apexes)
     ax.set_ylabel("Velocity (m/s)")
     ax.set_xlabel("Longitudinal Coordinate x (m)")
@@ -204,7 +204,7 @@ def simulate(pack):
     ax.plot(x, V, color='r', label="Final")
     ax.legend()
     plt.show()
-    '''
+    
 
     
     # laptime calculation    
@@ -280,12 +280,17 @@ def simulate(pack):
     energy_cost_total = motor_work/(3.6*10**6)                   # in kWh
     energy_gained_total = regenerated_energy/(3.6*10**6)         # in kWh
 
+    # RIT Energy Scalar
+    E_predicted = 9.736 #kWh
+    E_actual = 4.903
+    energy_scale = E_actual/E_predicted
+
     # we don't want it for open_all, but it would be nice to have the scaled-up energy calcs
-    #print("Energy cost is {:.3f} kWh".format(energy_cost_total*numLaps)) 
-    #print("Regenerated Power is {:.3f} kWh".format(energy_gained_total*numLaps)) 
+    #print("Energy cost is {:.3f} kWh".format(energy_scale*energy_cost_total*numLaps)) 
+    #print("Regenerated {:.3f} kWh".format(energy_scale*energy_gained_total*numLaps)) 
     #print()
 
-    energy_drain = energy_cost_total-energy_gained_total
+    energy_drain = energy_cost_total
     
     # information open_sweep needs to run accumulator calculations
     # laptime is for 1 lap, energy data is for the whole 22 laps
@@ -333,7 +338,7 @@ def simulate(pack):
     '''
     
             
-
+    
 
 
     # Output all the data in a readable csv

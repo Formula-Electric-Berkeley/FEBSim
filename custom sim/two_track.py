@@ -756,7 +756,7 @@ def opt_mintime():
                 torque_commanded - torque_max_motor <= 0
 
                 '''
-
+                
 
         # ENERGISTICS TODO
 

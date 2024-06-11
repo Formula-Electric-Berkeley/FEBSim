@@ -7,8 +7,8 @@ _  / / /__  __ \  _ \_  __ \_  / __  /| |_  /_/ /
 =================================================
 Vehicle: FEB_SN3_30kW
 Track:   Michigan 2014
-Date:    23/04/2024
-Time:    22:57:10
+Date:    25/04/2024
+Time:    18:06:47
 =================================================
 Simulation started.
 Maximum speed calculated at all points.
@@ -4988,7 +4988,7 @@ ________________________________________________
      71	   1546	      2	  386.2	  42.19	  42.26
 ________________________________________________
 Velocity profile calculated successfully.
-Solver time is: 1.151227 [s]
+Solver time is: 1.175884 [s]
 Post-processing initialised.
 Correct solution selected from modes.
 Laptime calculated.
@@ -5006,4 +5006,4 @@ Sector   1:  29.384 [s]
 Sector   2:  30.093 [s]
 Sector   3:   0.058 [s]
 Plots created and saved.
-Elapsed time is: 7.076266 [s]
+Elapsed time is: 16.200704 [s]
