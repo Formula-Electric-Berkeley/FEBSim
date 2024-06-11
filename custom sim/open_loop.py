@@ -180,7 +180,7 @@ def simulate(pack):
 
     #print(flag)
     #Below is a useful check to see where the apexes are:
-    
+    '''
     x = []
     xapex = []
     
@@ -204,7 +204,7 @@ def simulate(pack):
     ax.plot(x, V, color='r', label="Final")
     ax.legend()
     plt.show()
-    
+    '''
 
     
     # laptime calculation    
@@ -338,7 +338,7 @@ def simulate(pack):
     '''
     
             
-    
+
 
 
     # Output all the data in a readable csv
@@ -362,26 +362,35 @@ def simulate_endurance(pack, numLaps):
     energy_drains = [energistics0]              #total energy drained from the accumulator (estimate)
     pack_failure = [pack.is_depleted()]         #check if the pack is depleted
 
+    quick_breaker = False
+
     for lap in range(numLaps-1):
         laptime, energy_drain, output_df_prime = simulate(pack)
         laptimes.append(laptime)
         energy_drains.append(energy_drain)
-        pack_failure.append(pack.is_depleted())
+
+        quick_breaker = pack.is_depleted()
+
+        pack_failure.append(quick_breaker)
+
+        if quick_breaker:
+            break
+
         output_df = pd.concat([output_df, output_df_prime])
 
     
-    basic_header = ['Laptimes (s)', 'Energy Drains (kWh)', 'Pack Failure']
-    basic_output = pd.DataFrame(data=zip(laptimes, energy_drains, pack_failure), columns=basic_header)
+    #basic_header = ['Laptimes (s)', 'Energy Drains (kWh)', 'Pack Failure']
+    #basic_output = pd.DataFrame(data=zip(laptimes, energy_drains, pack_failure), columns=basic_header)
 
-    header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)', 
-              'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Kv', 'Motor Power (W)', 'Iq Current (A)']
+    #header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)', 
+    #          'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Kv', 'Motor Power (W)', 'Iq Current (A)']
 
-    writer = pd.ExcelWriter('open_loop_out1.xlsx', engine='xlsxwriter')
+    #writer = pd.ExcelWriter('open_loop_out1.xlsx', engine='xlsxwriter')
 
-    output_df.to_excel(writer, sheet_name='Main Output', index=False, header=header)
-    basic_output.to_excel(writer, sheet_name='Basic Output', index=False, header=basic_header)
+    #output_df.to_excel(writer, sheet_name='Main Output', index=False, header=header)
+    #basic_output.to_excel(writer, sheet_name='Basic Output', index=False, header=basic_header)
 
-    writer.close()
+    #writer.close()
     
 
     # compile the basic outputs for optimization
