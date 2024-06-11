@@ -144,6 +144,7 @@ def sweep():
     end_Es = []
     caps = []
     Ms = []
+    chosen_configs = []
 
     # for graphing
     end_energies = np.zeros((len(masses), len(power_caps)))
@@ -164,6 +165,7 @@ def sweep():
                 end_Es.append(energy)
                 caps.append(power_cap)
                 Ms.append(masses[i])
+                chosen_configs.append(configs[i])
 
     
     # Output everything using Pandas
