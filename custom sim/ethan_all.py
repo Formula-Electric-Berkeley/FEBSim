@@ -120,7 +120,7 @@ def autoX_sweep():
     numLaps = 22
 
     # loop over various motor_curves
-    power_caps = [80, 70, 60]
+    power_caps = [80]
 
     # Cl, Cd
     aero_coefficients = [[-1.98, -1.33],        # High downforce config
@@ -218,7 +218,7 @@ def autoX_sweep():
 
     df0 = np.concatenate((m, Capacities, cap, clift, cdrag, t1, e1, acc), axis=1)
     df1 = pd.DataFrame(df0)
-    writer = pd.ExcelWriter('autoX_data1.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter('autoX_data2.xlsx', engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
@@ -230,7 +230,7 @@ def aero_sweep():
     numLaps = 22
 
     # loop over various motor_curves
-    power_caps = [17, 12, 10]
+    power_caps = [20, 17, 15]
 
     # Cl, Cd
     aero_coefficients = [[-1.98, -1.33],        # High downforce config; negative = downforce, + is lift
@@ -257,7 +257,7 @@ def aero_sweep():
 
     capacities = []
 
-    driver_mass = 53
+    driver_mass = 80 #53
     base_mass = 231.0 + driver_mass
     with_aero = 245.0 + driver_mass         # for high downforce config
 
@@ -546,8 +546,64 @@ def accumulator_points():
 
 
 
-#aero_sweep()
+aero_sweep()
 
 #autoX_sweep()
 
-points_from_spreadsheet()
+#points_from_spreadsheet()
+
+
+'''
+To validate aero package addition / removal
+
+Use the test we got; compare speed, energy, points with and without endurance
+-> Compare all of this with what our sim predicts
+
+
+
+Ming's Contact Notes
+- We're in a pickle, debating whether to keep or use aero
+- Have you tried running a full endurance?
+- What are you simming this in?
+- The sim is benchmarked with past results of other teams
+- We're looking at 24 kW power limit
+    "That's really low. You should be fine"
+    -> ****I wanna do testing at high power cap and see how the accumulator drains********
+
+- Have you tried running without aero?
+- They're at 6.4 kWh
+- They have no aero, but in their sims, they were well under margin
+- The main limiting factor was temperature 
+    -> Check how we can minimize temperature
+    -> VTC6s and Emrax 228 are lowkey scary, not optimized. It will lead to more temperature 
+
+    
+We're primarily suspicious of our energy consumption. 
+    -> ***Check the energy with the skidpad.****
+    ->  This is the best testing we can have
+
+    -> Especially with all our sim validation, our angle could be: 
+        "the main weakpoint of our sims is the energy drain from the accumulator. We haven't done sufficient testing on this front, 
+        but when we compare our actual and simulated energy consumptions for the skidpad, we see simulated consumption is greater"  
+
+"Best bet is just drive slow"
+
+Do you have any strategies to help mitigate browning out as the pack voltage gets low?
+    -> They usually don't run into an issue except for the minimum allowed voltage
+    -> They have a 300V pack
+    -> Their pack doesn't operate at a point where it heats up much; it helps them avoid active cooling 
+
+Faster = burning more energy; slower = aero isn't helping 
+
+
+Chris's note
+    -> They were very confident they'd finish endurance without aero, with a high power cap, with a much heavier car, and a lower pack capacity**
+    -> We predict a 5.477946437 kWh consumption, they had a 5.4 kWh pack
+'''
+
+
+'''
+Skidpad energy and laptime from sim
+
+
+'''

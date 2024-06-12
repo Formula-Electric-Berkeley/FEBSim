@@ -269,6 +269,22 @@ def simulate(pack):
 
     
 
+    '''
+    Skidpad stuff
+    
+    '''
+    L_skidpad = 2*np.pi*15.25       # total arc length of two laps of 15.25 m diameter skidpad
+
+    L = L_skidpad + 1       # add the length of the initial straight
+
+    N_skid_points = L / tr.mesh_size
+
+    skid_dts = dt[:N_skid_points]
+    skid_time = np.cumsum(skid_dts)
+    
+    # The total laptime for the skidpad
+    skid_laptime = skid_time[-1]
+
 
 
 
@@ -276,9 +292,22 @@ def simulate(pack):
     motor_power = np.where(motor_power < 0, 0, motor_power)
     wheel_torque = np.where(wheel_torque < 0, 0, wheel_torque)
 
-    
+
+    #TODO skidpad stuff
+
+    skid_torques = wheel_torque[:N_skid_points]
+    skid_work = np.trapz(skid_torques / veh.tyre_radius, x = tr.x[:N_skid_points])
+
+    skid_energy_cost = skid_work/(3.6*10**6)                   # in kWh
+
+    skidpad = True
+    if skidpad:
+        return skid_laptime, skid_energy_cost
+
+
     # Work from the motor is force from the motor * dx integrated over the track
     motor_work = np.trapz(wheel_torque / veh.tyre_radius, x = tr.x)
+
 
     # Power of the motor numerically integrated over time in kWh; gives values about 1 kWh larger
     motor_energy = np.sum(np.multiply(motor_power, dt))
