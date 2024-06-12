@@ -266,6 +266,12 @@ def simulate(pack):
     motor_speed = wheel_speed*veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final   # convert to motor speed
     motor_power = motor_torque * motor_speed #in W
 
+
+    
+
+
+
+
     # Replace motor_power and wheel_torque curves with zeros where values are negative
     motor_power = np.where(motor_power < 0, 0, motor_power)
     wheel_torque = np.where(wheel_torque < 0, 0, wheel_torque)
@@ -299,26 +305,66 @@ def simulate(pack):
     # Quasi-transient accumulator calculations
     
     # leave the option to not simulate with the pack
-    pack_voltage = []
-    pack_discharge = []
+    pack_voltages = []
+    pack_discharges = []
     base_speeds = []
     kvs = []
     mot_powers = []
-    motor_currents = []
+    current_draws = []
 
     for i, power in enumerate(motor_power):
-        # drain the accumulator by the energy consumed during each time-step; smoothing included
-        pack.new_drain(power, dt[i])
+        cell_data0 = pack.get_cell_data()
+
+        # what is the total current we pull this timestep?
+        uncapped_current = power / cell_data0["voltage"]
+
+
+        # drain the accumulator by the energy consumed during each time-step, and get our target current
+        target_current, breaker_popped = pack.new_drain(power, dt[i])
+
+        cell_data = pack.get_cell_data()
+
+        # command a little less so that we converge
+        target_power = target_current * cell_data["voltage"]*0.99 
+
+
+
+        # if we ever exceed our software-maxed current, decrease our power to target_power
+        error = target_power - power        # if error is negative (this should always should be the case), we need to *decrease* our power and thus our speed
+
+        P = 1*10**-4 # convert from error (likely 1000s of Watts) to the velocity correction (likely 1s of m/s)
+
+        while breaker_popped:
+            # Change the velocity at this point to decrease our commanded power 
+            V[i] = V[i] + error*P 
+
+            # Calculate wheel torque and speed for this new velocity
+            wheel_torque = TPS[i] * torque_func(V[i])        
+            wheel_speed = V[i]/veh.tyre_radius 
+
+            # find the new error
+            new_power = wheel_torque*wheel_speed
+            error = target_power - new_power
+
+            # if error > np.abs(target_power - power): # if we get farther off
+                #print("{}    {}".format(error, (target_power - power)))
+                # it eventually converges due to the sign inclusion I put above
+            
+
+            # attempt to actually drain the accumulator and refresh the breaker if need-be (this is our escape from the loop)
+            target_current, breaker_popped = pack.new_drain(new_power, dt[i])
+
+
+
         cell_data = pack.get_cell_data()
 
         accumulator_voltage = cell_data["voltage"]
-        pack_voltage.append(accumulator_voltage)
-        pack_discharge.append(cell_data["discharge"])
+        pack_voltages.append(accumulator_voltage)
+        pack_discharges.append(cell_data["discharge"])
         basespeed, kv_est = motor.calculate_base_speed(accumulator_voltage, power)
         mot_powers.append(power)
         base_speeds.append(basespeed)
-        kvs.append(kv_est)
-        motor_currents.append(motor.calculate_Iq_current(motor_torque[i]))
+        current_draws.append(target_current)
 
         # Adjust our velocity and laptime according to base speed limitations   
         # Effectively, reduce our maximum speed to the base speed at every point
@@ -344,9 +390,10 @@ def simulate(pack):
     # Output all the data in a readable csv
 
     header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)', 
-              'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Kv', 'Motor Power (W)', 'Iq Current (A)']
-    transient_output = pd.DataFrame(data=zip(time, V, motor_torque, brake_force, pack_voltage, pack_discharge, base_speeds, kvs, mot_powers, motor_currents), columns=header)
+              'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Motor Power (W)', 'Current Draw (A)']
+    transient_output = pd.DataFrame(data=zip(time, V, motor_torque, brake_force, pack_voltages, pack_discharges, base_speeds, mot_powers, current_draws), columns=header)
     
+
 
 
 
@@ -361,22 +408,22 @@ def simulate_endurance(pack, numLaps):
     laptimes = [laptime0]
     energy_drains = [energistics0]              #total energy drained from the accumulator (estimate)
     pack_failure = [pack.is_depleted()]         #check if the pack is depleted
-
-    quick_breaker = False
-
+    
     for lap in range(numLaps-1):
+        
         laptime, energy_drain, output_df_prime = simulate(pack)
         laptimes.append(laptime)
         energy_drains.append(energy_drain)
 
         quick_breaker = pack.is_depleted()
-
         pack_failure.append(quick_breaker)
+        output_df = pd.concat([output_df, output_df_prime])
 
         if quick_breaker:
+            print("Pack failure on lap {}".format(lap+2))
             break
 
-        output_df = pd.concat([output_df, output_df_prime])
+
 
     
     #basic_header = ['Laptimes (s)', 'Energy Drains (kWh)', 'Pack Failure']

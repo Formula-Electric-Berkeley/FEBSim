@@ -268,8 +268,8 @@ def other_points(i, i_max):
 
 
 
-# simulate laptime for straight line acceleration
-def simulate_accel(veh):
+# simulate laptime for straight line acceleration; assume negligible battery drain
+def simulate_accel(veh, starting_voltage):
     v = veh.vehicle_speed # for interpolating GGV
 
     ax_acc = [] # create GGV
@@ -295,7 +295,13 @@ def simulate_accel(veh):
 
         # long acc vector
 
-        ax_acc.append(np.minimum(ax_tyre_max_acc,ax_power_limit)+ax_drag)             # limiting by engine power
+        ax_acci = np.minimum(ax_tyre_max_acc,ax_power_limit)+ax_drag
+        ax_acc.append(ax_acci) 
+
+
+    ax_acc = np.float64(ax_acc)
+        
+        
 
     # numerical integration
     dt = 0.01 # s
@@ -311,11 +317,41 @@ def simulate_accel(veh):
         current_vehicle_speed += acceleration*dt                    # update velocity
         time_elapsed += dt                                          # count time
 
+        # limiting to not pull > 60 Amps
+        current_limit = 999 #Amps
+        # We don't care about current limiting accel yet
+
+        # Interpolate motor torque at the current vehicle speed
+        torque_func = interp1d(v, veh.wheel_torque, kind='linear', fill_value='extrapolate')
+        wheel_torque = torque_func(current_vehicle_speed)
+        motor_torque = wheel_torque / (veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final*veh.n_primary*veh.n_gearbox*veh.n_final)
+
+        wheel_speed = current_vehicle_speed/veh.tyre_radius # wheel speed in radians/second
+        motor_speed = wheel_speed*veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final   # convert to motor speed
+
+        motor_power = motor_torque * motor_speed #in W
+        current = motor_power / starting_voltage
+
+        # If we pull 60 A
+        if current > current_limit:
+            # Decrease our commanded ax_acc
+            #print("Breaker popped with current {} A".format(current))
+            ax_acc = 0.95*ax_acc
+
+            # If we pop the breaker, reset the test
+            current_vehicle_speed = 0 # velocity of the vehicle, standing start
+            current_vehicle_position = 0 # position of the vehicle
+            time_elapsed = 0
+
+
+
         # 75 meter straight
         if current_vehicle_position >= 75:
             accelerating = False # stop
 
     # energy consumption can be estimated from 1/2 m v^2
+
+    #print("Final speed after 75m {}".format(current_vehicle_speed))
 
     return time_elapsed, current_vehicle_speed
 

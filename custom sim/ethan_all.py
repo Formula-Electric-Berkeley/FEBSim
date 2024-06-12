@@ -94,43 +94,46 @@ def points_estimate(numLaps, time_endurance, energy_endurance, time_autoX, time_
     
 
     # estimate our efficiency factor from 2023 results 
-    CO2_ours = CO2_conversion*energy_endurance*RIT_scale_factor/numLaps
-    efficiency_factor = (minimum_endurance_time/time_endurance) * (CO2_min/CO2_ours)
+    #CO2_ours = CO2_conversion*energy_endurance*RIT_scale_factor/numLaps
+    #efficiency_factor = (minimum_endurance_time/time_endurance) * (CO2_min/CO2_ours)
+    efficiency_factor, efficiency_score_2023 = calculate_efficiency_factor(time_endurance/numLaps, energy_endurance)
 
     # using the 2023 metric to calculate efficiency
-    efficiency_score_2023 = min(100, 100*((eff_factor_min/efficiency_factor)-1)/((eff_factor_min/eff_factor_max)-1))
+    #efficiency_score_2023 = min(100, 100*((eff_factor_min/efficiency_factor)-1)/((eff_factor_min/eff_factor_max)-1))
 
     # using the proposed 2024 metric
-    efficiency_score_linear = max(100, 100*(efficiency_factor-eff_factor_min)/(eff_factor_max/eff_factor_min))
+    efficiency_score_linear = min(100, 100*(efficiency_factor-eff_factor_min)/(eff_factor_max-eff_factor_min))
 
-    ptsEff = efficiency_score_2023
+    ptsEff = efficiency_score_linear
 
     # Return calculated points
-    pts = [ptsEnd, ptsAutoX, ptsAcc, ptsEff, 0]
+    pts = [ptsEnd, ptsAutoX, 0.0, ptsEff, 0.0]
 
     ptsTot = np.sum(pts)
 
     return (ptsEnd, ptsAutoX, ptsEff, ptsTot)
 
-
 # alter this as needed, depending on what we want to sweep
-def sweep():    
+def autoX_sweep():    
     # used for points estimation
     ptsRef_filename = 'SN3_Points_Reference.xlsx'
     numLaps = 22
 
     # loop over various motor_curves
-    power_caps = [80, 70, 60, 50, 40, 30, 20, 10]
+    power_caps = [80, 70, 60]
 
     # Cl, Cd
-    aero_coefficients = [[1.98, 1.33],        # High downforce config
-                         [1.23, 0.93]]        # Low drag config
+    aero_coefficients = [[-1.98, -1.33],        # High downforce config
+                         [-1.23, -0.93],        # Low drag config
+                         [-0.05, -0.52]]        # No aero package
 
     base_mass = 172.1+80    
 
-    # loop over various masses
-    masses = [base_mass, base_mass]
-    configs = ["High downforce", "Low drag"]
+    # with aero, no driver;     245.0
+    # without aero, no driver;  231.0
+
+    # driver weight:        80
+
 
     pack_dimension = [14, 4, 10]
 
@@ -139,23 +142,142 @@ def sweep():
     pack = accumulator.Pack()
     pack.pack(series, parallel, segment)
 
+    # get the cell mass, name, and capacity for output
+    cell_data = pack.get_cell_data()
+    capacity = cell_data["capacity"]/1000       # in kWh
+
+    capacities = []
+
+    driver_mass = 53
+    base_mass = 231.0 + driver_mass
+    with_aero = 245.0 + driver_mass         # for high downforce config
+
+    masses = [with_aero, with_aero, base_mass]
+    
+    # output vectors of the sim for easier output in excel 
+    autoX_times = []
+    Es = []
+    caps = []
+    Ms = []
+    Cls = []
+    Cds = []
+    accel_times = []
+
+    #start endurance
+    track.reload('Michigan_2022_AutoX.xlsx')
+
+    for i, aero_package in enumerate(aero_coefficients):
+        for j, power_cap in enumerate(power_caps):
+            pack.reset()
+            vehicle.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
+
+            laptime, energy, transient_output = open_loop.simulate(pack)
+
+            pack_failed = pack.is_depleted()
+
+            if not (pack_failed):
+                autoX_times.append(laptime)
+                Es.append(energy)
+                caps.append(power_cap)
+                Ms.append(masses[i])
+                Cls.append(aero_package[0])
+                Cds.append(aero_package[1])
+                capacities.append(capacity)
+
+                # Run accel 
+                accumulator_voltage = cell_data["voltage"]
+                accel_time, final_velocity = lap_utils.simulate_accel(vehicle, accumulator_voltage)
+                accel_times.append(accel_time)
+
+                writer = pd.ExcelWriter('transient_output_pack{:}_{:}kW.xlsx'.format(i, power_cap), engine='xlsxwriter')
+
+                transient_output.to_excel(writer, sheet_name='Sheet1', index=False)
+                writer.close()
+
+
+            else:
+                print("Pack failure at {}".format(power_cap))
+
+
+    
+
+
+
+    # Output everything using Pandas
+    header = ['Mass (kg)', 'Capacity (kWh)', 'Power Cap (kW)', 'Cls', 'Cds', 'AutoX Laptime (s)', 'AutoX Energy (kWh)', 'Accel Laptime (s)']
+
+    m = np.vstack(Ms)
+    Capacities = np.vstack(capacities)
+    cap = np.vstack(caps)
+    clift = np.vstack(Cls)
+    cdrag = np.vstack(Cds)
+    t1 = np.vstack(autoX_times)
+    e1 = np.vstack(Es)
+    acc = np.vstack(accel_times)
+  
+
+    df0 = np.concatenate((m, Capacities, cap, clift, cdrag, t1, e1, acc), axis=1)
+    df1 = pd.DataFrame(df0)
+    writer = pd.ExcelWriter('autoX_data1.xlsx', engine='xlsxwriter')
+
+    df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
+    writer.close()
+
+# alter this as needed, depending on what we want to sweep
+def aero_sweep():    
+    # used for points estimation
+    ptsRef_filename = 'SN3_Points_Reference.xlsx'
+    numLaps = 22
+
+    # loop over various motor_curves
+    power_caps = [17, 12, 10]
+
+    # Cl, Cd
+    aero_coefficients = [[-1.98, -1.33],        # High downforce config; negative = downforce, + is lift
+                         [-1.23, -0.93],        # Low drag config; must be negative!
+                         [-0.05, -0.52]]        # No aero package
+
+
+    # with aero, no driver;     245.0
+    # without aero, no driver;  231.0
+
+    # driver weight:        80
+
+
+    pack_dimension = [14, 4, 10]
+
+    # initialize our pack
+    series, parallel, segment = pack_dimension
+    pack = accumulator.Pack()
+    pack.pack(series, parallel, segment)
+
+    # get the cell mass, name, and capacity for output
+    cell_data = pack.get_cell_data()
+    capacity = cell_data["capacity"]/1000       # in kWh
+
+    capacities = []
+
+    driver_mass = 53
+    base_mass = 231.0 + driver_mass
+    with_aero = 245.0 + driver_mass         # for high downforce config
+
+    masses = [with_aero, with_aero, base_mass]
+    
+
     # output vectors of the sim for easier output in excel 
     end_times = []
     end_Es = []
     caps = []
     Ms = []
-    chosen_configs = []
-
-    # for graphing
-    end_energies = np.zeros((len(masses), len(power_caps)))
-    end_laptimes = np.zeros((len(masses), len(power_caps)))
+    Cls = []
+    Cds = []
 
     #start endurance
     track.reload('Michigan_2021_Endurance.xlsx')
 
     for i, aero_package in enumerate(aero_coefficients):
         for j, power_cap in enumerate(power_caps):
-
+            pack.reset()
             vehicle.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
 
             laptime, energy, pack_failed = open_loop.simulate_endurance(pack, numLaps)
@@ -165,26 +287,75 @@ def sweep():
                 end_Es.append(energy)
                 caps.append(power_cap)
                 Ms.append(masses[i])
-                chosen_configs.append(configs[i])
+                Cls.append(aero_package[0])
+                Cds.append(aero_package[1])
+                capacities.append(capacity)
 
     
     # Output everything using Pandas
-    header = ['Mass (kg)', 'Power Cap (kW)', 'Config', 'Endurance Laptime (s)', 'Endurance Energy (kWh)']
+    header = ['Mass (kg)', 'Capacity (kWh)', 'Power Cap (kW)', 'Cls', 'Cds', 'Endurance Laptime (s)', 'Endurance Energy (kWh)']
 
     m = np.vstack(Ms)
+    Capacities = np.vstack(capacities)
     cap = np.vstack(caps)
-    con = np.vstack(configs)
+    clift = np.vstack(Cls)
+    cdrag = np.vstack(Cds)
     t1 = np.vstack(end_times)
     e1 = np.vstack(end_Es)
   
 
-    df0 = np.concatenate((m, cap, con, t1, e1), axis=1)
+    df0 = np.concatenate((m, Capacities, cap, clift, cdrag, t1, e1), axis=1)
     df1 = pd.DataFrame(df0)
-    writer = pd.ExcelWriter('Sweep_Data.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter('endurance_data7.xlsx', engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
      
+
+# Estimate points for previously run outputs of endurance, autoX, and accel
+def points_from_spreadsheet():
+    numEnduranceLaps = 22
+
+    endurance_reference_file = "endurance_data6.xlsx"
+    endurance_data = pd.io.excel.read_excel(endurance_reference_file, sheet_name=1)
+
+    autoX_reference_file ="autoX_data1.xlsx"
+    autoX_data = pd.io.excel.read_excel(autoX_reference_file, sheet_name=1)
+
+        
+    # Convert all our data to floats
+    endurance_times = endurance_data.loc[:, "Endurance Laptime (s)"]
+    endurance_times = endurance_times.astype(float)
+
+    endurance_energies = endurance_data.loc[:, "Endurance Energy (kWh)"]
+    endurance_energies = endurance_energies.astype(float)
+
+    autoX_times = autoX_data.loc[:, "AutoX Laptime (s)"] 
+    autoX_times = autoX_times.astype(float)
+
+    accel_times = autoX_data.loc[:, "Accel Laptime (s)"]
+    accel_times = accel_times.astype(float)
+
+    end_points = []
+    eff_points = []
+    autoX_points = []
+    total_points = []
+    for i in range(len(endurance_times)):
+        points = points_estimate(numEnduranceLaps, endurance_times[i], endurance_energies[i], autoX_times[i], accel_times[i])
+        end_points.append(points[0])
+        autoX_points.append(points[1])
+        eff_points.append(points[2])
+        total_points.append(points[3])
+
+    points_header = ['Endurance Pts', 'AutoX Pts', 'Efficiency Pts', 'Total Pts']
+
+    points_data = pd.DataFrame(data=zip(end_points, autoX_points, eff_points, total_points), columns=points_header)
+
+    # Output all the data, inclusding the points
+    writer = pd.ExcelWriter('aero_points_sims3.xlsx', engine='xlsxwriter')
+    points_data.to_excel(writer, sheet_name='Sheet1', index=False)
+    writer.close()
+
 def optimize_endurance(endurance_trackfile, possible_packs, power_caps, numLaps, header):
     
     # load our endurance track into the sim
@@ -360,9 +531,9 @@ def accumulator_points():
         eff_points.append(points[2])
         total_points.append(points[3])
 
-    points_header = ['Endurance Pts', 'Efficiency Pts', 'AutoX Pts', 'Total Pts']
+    points_header = ['Endurance Pts', 'AutoX Pts', 'Efficiency Pts', 'Total Pts']
 
-    points_data = pd.DataFrame(data=zip(end_points, eff_points, autoX_points, total_points), columns=points_header)
+    points_data = pd.DataFrame(data=zip(end_points, autoX_points, eff_points, total_points), columns=points_header)
 
     output_df = pd.concat([endurance_data, autoX_data, accel_data, points_data], 
                   axis = 1)
@@ -375,5 +546,8 @@ def accumulator_points():
 
 
 
+#aero_sweep()
 
-sweep()
+#autoX_sweep()
+
+points_from_spreadsheet()
