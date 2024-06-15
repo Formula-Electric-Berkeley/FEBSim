@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
+from scipy.interpolate import interp1d
+from scipy.interpolate import griddata
 
+import matplotlib.pyplot as plt
 
 class motor():
     def __init__(self):
@@ -31,6 +34,17 @@ class motor():
 
         
         return self.motor_speed, torque_capped
+    
+    # Helper function to get the corresponding motor torque given a motor speed at our power cap 
+    def get_torque_from_motor_speed(self, known_motor_speed, power_cap):
+        motor_speeds, motor_torques = self.get_motor_curve(power_cap) #rpm, Nm
+        interp_func = interp1d(motor_speeds, motor_torques)
+        # Interpolating the motor torque at known_wheel_speed
+        motor_torque_at_known_speed = interp_func(known_motor_speed)
+
+        return motor_torque_at_known_speed
+
+        
 
     def export_curve(self, power_cap):
         motor_speed, torque_capped = self.get_motor_curve(power_cap)
@@ -102,3 +116,67 @@ class motor():
         base_speed = base_speed * 2*np.pi* TIRE_RADIUS/(GEAR_RATIO*60)
 
         return base_speed, estimated_kV
+    
+    
+
+
+    def motor_efficiency(motor_speed, motor_torque):
+        colors = ['red', 'orange', 'green', 'blue', 'violet']
+
+        base_name = 'motor_curves\\'
+
+        labels = [86, 90, 94, 95, 96]
+        datasets = []
+        for i, label in enumerate(labels):
+            dfi = pd.read_csv(base_name+'{}.csv'.format(labels[i]), header=None)
+            dfi.columns = ['motor_speed', 'motor_torque']
+            dfi['motor_speed'] = dfi['motor_speed'] #* 2*np.pi/60 # convert to rads/s
+
+            eff_frame = pd.DataFrame({'efficiency': [labels[i]]})
+
+            dfi = pd.concat((dfi, eff_frame))
+            
+            datasets.append(dfi)
+
+        df_all = pd.concat([dfi[0], dfi[1], dfi[2], dfi[3], dfi[4]])
+
+        
+        plt.figure(figsize=(10, 8))
+
+
+        for df, color, label in zip(datasets, colors, labels):
+            # Plotting original points]
+            plt.scatter(df['X'], df['Y'], label=f'{label}', color=color, alpha=0.5)
+
+        
+
+        # Create a grid for interpolation
+        grid_x, grid_y = np.mgrid[0:5001:100j, 0:251:100j]
+
+        # Interpolate the efficiency values on the grid
+        points = df_all[['motor_speed', 'motor_torques']].values
+        values = df_all[['efficiency']].values
+
+        #grid_z = griddata(points, values, (grid_x, grid_y), method='cubic')
+
+        #plt.contourf(grid_x, grid_y, grid_z, levels=15, cmap='viridis')
+        #plt.colorbar(label='Efficiency')
+
+
+        plt.title('Motor Efficiency')
+        plt.xlabel('Motor Speed (rad/s)')
+        plt.ylabel('Torque (Nm)')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+
+
+        #return griddata(points, values, (motor_speed, motor_torque), method='cubic')
+
+
+
+    #motor_efficiency(2000, 150)
+
+    
+

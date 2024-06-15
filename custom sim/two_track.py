@@ -5,6 +5,10 @@ import pandas as pd
 import track as tr
 import vehicle as veh
 
+import motor_model
+from scipy.interpolate import interp1d
+motor = motor_model.motor()
+
 # Define constants
 mu = 0.75  # coefficient of friction for tires
 # pacejka model
@@ -689,7 +693,49 @@ def opt_mintime():
         1. add all physical constants
         2. add motor torque curve
         3. add power limit / energy limit constraints (these will fix our motor curve)
+
+
+        At each collocation point, the maximum amount of torque we can output is dependent on our motor speed 
+
+        We can generate a motor curve given a power cap
+
+
         """
+
+        # Power cap in kW; make this a control variable later
+        power_cap = 80
+        
+        
+        # Determine the motor speed        
+        known_motor_speed = (Xk[7] + Xk[8]) / (2*veh.gear_ratio)
+
+        # Interpolate our motor curve to get the maximum allowed motor torque for this speed
+
+        motor_speeds, motor_torques = motor.get_motor_curve(power_cap) #rpm, Nm
+        motor_speeds = motor_speeds * 2*np.pi/60 # convert from rpm to rads / s
+
+        #interp_func = interp1d(motor_speeds, motor_torques)
+        torque_interpolated = ca.interpolant('torque_interpolated', 'linear', [motor_speeds], motor_torques)
+
+        # Interpolating the motor torque at known_wheel_speed
+        motor_torque_max = torque_interpolated(known_motor_speed)
+    
+
+
+        # Constrain our motor torque to be less than the maximum
+        g.append(motor_torque_max - Uk[1])
+        lbg.append([0.0])
+        ubg.append([ca.inf])
+
+
+
+
+
+
+        
+
+
+
 
         # TODO: remaining issues
         # fix alternating between drive and brake
@@ -731,31 +777,26 @@ def opt_mintime():
                 ]
             )
 
-                        # we impose no bounds on how fast drive and brake commands can go to 0
-                        lbg.append([delta_min / delta_step, -np.inf, f_brake_min / brake_step, -np.inf, -np.inf])
-                        ubg.append([delta_max / delta_step, f_drive_max / drive_step, np.inf, np.inf, np.inf])
+            # append controls (for regularization)
+            #delta_p.append(Uk[0] * delta_s)
+            #F_p.append(Uk[1] * torque_drive_s / 10000.0 + Uk[2] * f_brake_s / 10000.0)
 
-                
-                # append controls (for regularization)
-                #delta_p.append(Uk[0] * delta_s)
-                #F_p.append(Uk[1] * torque_drive_s / 10000.0 + Uk[2] * f_brake_s / 10000.0)
-
-                # append outputs, renormalized to their proper size
+            # append outputs, renormalized to their proper size
 
 
 
-                #TODO start here!!!!!!!
+            #TODO start here!!!!!!!
 
-                '''
-                # do both of the back wheels need to have the same angular velocity 
-                # there is some difference in slip, but this could be because the velocity projection is different
-                # motor and brake torques are the same, but if grip torques are ever different (i.e. different velocity projection or slip angle), then ws would differ
-                # UNLESS we actively constrain that
+            '''
+            # do both of the back wheels need to have the same angular velocity 
+            # there is some difference in slip, but this could be because the velocity projection is different
+            # motor and brake torques are the same, but if grip torques are ever different (i.e. different velocity projection or slip angle), then ws would differ
+            # UNLESS we actively constrain that
 
-                torque_max_motor = f(angular speed of back axle, power cap)
-                torque_commanded - torque_max_motor <= 0
+            torque_max_motor = f(angular speed of back axle, power cap)
+            torque_commanded - torque_max_motor <= 0
 
-                '''
+            '''
                 
 
         # ENERGISTICS TODO
@@ -768,6 +809,7 @@ def opt_mintime():
         Energy consumption can come from 
         """
 
+        # After we constrain Xk and Uk, add them to our control vectors
         x_opt.append(Xk * x_s)
         u_opt.append(Uk * u_s)
 

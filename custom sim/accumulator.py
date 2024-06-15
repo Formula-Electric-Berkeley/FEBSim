@@ -228,7 +228,7 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
         #print(current_per_cell)
 
         self.breaker_popped = False
-        current_cap = 6000 #Amps
+        current_cap = 60 #Amps
 
 
         #TODO; fix derating so that we don't auto-fail the lap but rather cap  

@@ -98,6 +98,7 @@ i += 1
 
 # tyres
 factor_grip = info.at[(i, "Value")]
+
 i += 1
 tyre_radius = info.at[(i, "Value")]/1000
 i += 1
@@ -145,49 +146,53 @@ ratio_final = info.at[(i, "Value")]
 i += 1
 ratio_gearbox = info.at[(i, "Value")]
 
-#3/20/24: new stuff
-'''
-drag_coeff = 1/2*rho*factor_Cl*Cl*A #coefficient in front of v^2 for drag force calculation
-delta_max = 38 * np.pi / 180 #38 degrees is our max steering angle
-drive_max = 20000 #Nm
-brake_max = 50000 #N
-max_velocity = 30 #m/s; makes convergence faster
+#3/20/24: two track information
 
-#Brake coefficients (how is the brake force split up)
-brake_fr = 0.5*0.6
-brake_fl = 0.5*0.6
-brake_rl = 0.5*0.4
-brake_rr = 0.5*0.4
+# Do we want to run a two-track sim on this vehicle?
+two_track = True
 
-Iz      = 5550        # moment of inertiate
-lf      = 1.0         # front wheelbase length
-lr      = 1.2         # rear  wheelbase length
-wf      = 1.7         # rear axle width
-wr      = 1.7         # front axle width
-h       = 0.5         # distance from road surface to vehicle center of mass
-mu      = 0.75        # coefficient of friction for tires
-tau_b   = 0.05        # brake time constant (first order lag)
+if two_track:
+    drag_coeff = 1/2*rho*factor_Cl*Cl*A #coefficient in front of v^2 for drag force calculation
+    delta_max = 38 * np.pi / 180 #38 degrees is our max steering angle
+    drive_max = 20000 #Nm
+    brake_max = 50000 #N
+    max_velocity = 30 #m/s; makes convergence faster
+
+    #Brake coefficients (how is the brake force split up)
+    brake_fr = 0.5*0.6
+    brake_fl = 0.5*0.6
+    brake_rl = 0.5*0.4
+    brake_rr = 0.5*0.4
+
+    Iz      = 5550        # moment of inertiate
+    lf      = 1.0         # front wheelbase length
+    lr      = 1.2         # rear  wheelbase length
+    wf      = 1.7         # rear axle width
+    wr      = 1.7         # front axle width
+    h       = 0.5         # distance from road surface to vehicle center of mass
+    mu      = 0.75        # coefficient of friction for tires
+    tau_b   = 0.05        # brake time constant (first order lag)
 
 
-Je      = 0.28        # engine moment of inertia
-Jw      = 0.05        # wheel moment of inertia
-R       = 0.12055     # drivetrain gear ratio
-be      = 0.008       # engine damping coefficient
-re      = 0.35        # effective wheel radius
-rb      = 0.3         # effective brake radius
+    Je      = 0.28        # engine moment of inertia
+    Jw      = 0.05        # wheel moment of inertia
+    R       = 0.12055     # drivetrain gear ratio
+    be      = 0.008       # engine damping coefficient
+    re      = 0.35        # effective wheel radius
+    rb      = 0.3         # effective brake radius
 
-car_width = 0
+    car_width = 0
 
-track_width_front = wf
-track_width_rear = wr
-cg_height = h
+    track_width_front = wf
+    track_width_rear = wr
+    cg_height = h
 
-#How to find the max rad/s of the wheels?
-gear_ratio = ratio_final
-omega_max = 5500/gear_ratio #5500 rpm is the max for the motor
-omega_max = omega_max*np.pi/30 #convert to rad/s
-omega_max = omega_max * 100 #factor of safety (to account for braking)
-'''
+    #How to find the max rad/s of the wheels?
+    gear_ratio = ratio_final
+    omega_max = 5500/gear_ratio #5500 rpm is the max for the motor
+    omega_max = omega_max*np.pi/30 #convert to rad/s
+    omega_max = omega_max * 100 #factor of safety (to account for braking)
+
 
 #We don't have gears or NOG, so that part can be left empty
 #We exclude gears from our Powertrain model, but if we somehow get gears in the future, it should add back fast

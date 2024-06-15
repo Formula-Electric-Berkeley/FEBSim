@@ -272,7 +272,7 @@ def simulate(pack):
     '''
     Skidpad stuff
     
-    '''
+    
     L_skidpad = 2*np.pi*15.25       # total arc length of two laps of 15.25 m diameter skidpad
 
     L = L_skidpad + 1       # add the length of the initial straight
@@ -285,7 +285,7 @@ def simulate(pack):
     # The total laptime for the skidpad
     skid_laptime = skid_time[-1]
 
-
+    '''
 
 
     # Replace motor_power and wheel_torque curves with zeros where values are negative
@@ -293,6 +293,7 @@ def simulate(pack):
     wheel_torque = np.where(wheel_torque < 0, 0, wheel_torque)
 
 
+    '''
     #TODO skidpad stuff
 
     skid_torques = wheel_torque[:N_skid_points]
@@ -303,6 +304,8 @@ def simulate(pack):
     skidpad = True
     if skidpad:
         return skid_laptime, skid_energy_cost
+
+    '''
 
 
     # Work from the motor is force from the motor * dx integrated over the track
@@ -320,6 +323,22 @@ def simulate(pack):
     E_actual = 4.903
     energy_scale = E_actual/E_predicted
 
+    # we predict like 
+    #skidpad_scale_factor = 0.0063582105931661095 / 0.01552799231063735
+
+    #scaled_motor_power = skidpad_scale_factor * motor_power
+
+    motor_energy = np.sum(np.multiply(motor_power, dt))
+
+
+    energy_cost_total = motor_energy/(3.6*10**6)                   # in kWh
+
+
+    # so that we include the scaling upstream in our accumulator sims
+    motor_power = motor_power
+
+
+    
     # we don't want it for open_all, but it would be nice to have the scaled-up energy calcs
     #print("Energy cost is {:.3f} kWh".format(energy_scale*energy_cost_total*numLaps)) 
     #print("Regenerated {:.3f} kWh".format(energy_scale*energy_gained_total*numLaps)) 
@@ -342,21 +361,15 @@ def simulate(pack):
     current_draws = []
 
     for i, power in enumerate(motor_power):
-        cell_data0 = pack.get_cell_data()
-
-        # what is the total current we pull this timestep?
-        uncapped_current = power / cell_data0["voltage"]
-
 
         # drain the accumulator by the energy consumed during each time-step, and get our target current
         target_current, breaker_popped = pack.new_drain(power, dt[i])
 
         cell_data = pack.get_cell_data()
 
-        # command a little less so that we converge
+        # cconvert our target current to a target motor power; command a little less so that we converge
         target_power = target_current * cell_data["voltage"]*0.99 
-
-
+        
 
         # if we ever exceed our software-maxed current, decrease our power to target_power
         error = target_power - power        # if error is negative (this should always should be the case), we need to *decrease* our power and thus our speed
@@ -367,7 +380,7 @@ def simulate(pack):
             # Change the velocity at this point to decrease our commanded power 
             V[i] = V[i] + error*P 
 
-            # Calculate wheel torque and speed for this new velocity
+            # Calculate wheel torque and speed corresponding to this new velocity
             wheel_torque = TPS[i] * torque_func(V[i])        
             wheel_speed = V[i]/veh.tyre_radius 
 
@@ -375,16 +388,26 @@ def simulate(pack):
             new_power = wheel_torque*wheel_speed
             error = target_power - new_power
 
-            # if error > np.abs(target_power - power): # if we get farther off
-                #print("{}    {}".format(error, (target_power - power)))
+            #if error > np.abs(target_power - power): # if we get farther off
+                #print("{}    {}".format(new_power, power))
                 # it eventually converges due to the sign inclusion I put above
             
 
             # attempt to actually drain the accumulator and refresh the breaker if need-be (this is our escape from the loop)
             target_current, breaker_popped = pack.new_drain(new_power, dt[i])
 
+            motor_power[i] = new_power
 
 
+
+        # Recalculate energy consumption based on our adjusted motor powers
+
+        motor_energy = np.sum(np.multiply(motor_power, dt))
+        energy_cost_total = motor_energy/(3.6*10**6)                   # in kWh
+        energy_drain = energy_cost_total
+
+
+        # Get cell data for transient output
         cell_data = pack.get_cell_data()
 
         accumulator_voltage = cell_data["voltage"]
@@ -452,6 +475,8 @@ def simulate_endurance(pack, numLaps):
             print("Pack failure on lap {}".format(lap+2))
             break
 
+    
+
 
 
     
@@ -488,11 +513,6 @@ def simulate_pack(pack_data):
     file_name = f"openloop_out.csv"
     transient_output.to_csv(file_name, sep=',', encoding='utf-8', index=False)
 
-
-#pack = accumulator.Pack()
-#pack.pack(14, 4, 10) 
-
-#simulate_endurance(pack, 22)
 
 
 # RIT Actual

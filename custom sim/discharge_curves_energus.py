@@ -108,4 +108,4 @@ def return_polynomials():
 
     return polynomials
     
-plot()
+#plot()

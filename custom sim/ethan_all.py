@@ -120,7 +120,7 @@ def autoX_sweep():
     numLaps = 22
 
     # loop over various motor_curves
-    power_caps = [80]
+    power_caps = [24, 20, 15]
 
     # Cl, Cd
     aero_coefficients = [[-1.98, -1.33],        # High downforce config
@@ -148,7 +148,7 @@ def autoX_sweep():
 
     capacities = []
 
-    driver_mass = 53
+    driver_mass = 87
     base_mass = 231.0 + driver_mass
     with_aero = 245.0 + driver_mass         # for high downforce config
 
@@ -230,12 +230,12 @@ def aero_sweep():
     numLaps = 22
 
     # loop over various motor_curves
-    power_caps = [20, 17, 15]
+    power_caps = [30, 24, 20, 15]
 
     # Cl, Cd
-    aero_coefficients = [[-1.98, -1.33],        # High downforce config; negative = downforce, + is lift
-                         [-1.23, -0.93],        # Low drag config; must be negative!
-                         [-0.05, -0.52]]        # No aero package
+    aero_coefficients = [#[-1.98, -1.33],            # High downforce config; negative = downforce, + is lift
+                        [-1.23, -0.93]]#,           # Low drag config; must be negative!
+                        #[-0.05, -0.52]]           # No aero package
 
 
     # with aero, no driver;     245.0
@@ -257,11 +257,14 @@ def aero_sweep():
 
     capacities = []
 
-    driver_mass = 80 #53
-    base_mass = 231.0 + driver_mass
-    with_aero = 245.0 + driver_mass         # for high downforce config
+    driver_masses = [45, 55, 65, 75, 90]
+    #base_mass = 231.0 + driver_mass
+    with_aero = 245.0          # for high downforce config
 
-    masses = [with_aero, with_aero, base_mass]
+    masses = []
+
+    for driver_mass in driver_masses:
+        masses.append(with_aero + driver_mass)
     
 
     # output vectors of the sim for easier output in excel 
@@ -275,8 +278,10 @@ def aero_sweep():
     #start endurance
     track.reload('Michigan_2021_Endurance.xlsx')
 
-    for i, aero_package in enumerate(aero_coefficients):
+    for i, mass in enumerate(masses):
         for j, power_cap in enumerate(power_caps):
+
+            aero_package = aero_coefficients[0]
             pack.reset()
             vehicle.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
 
@@ -291,6 +296,7 @@ def aero_sweep():
                 Cds.append(aero_package[1])
                 capacities.append(capacity)
 
+                
     
     # Output everything using Pandas
     header = ['Mass (kg)', 'Capacity (kWh)', 'Power Cap (kW)', 'Cls', 'Cds', 'Endurance Laptime (s)', 'Endurance Energy (kWh)']
@@ -306,7 +312,7 @@ def aero_sweep():
 
     df0 = np.concatenate((m, Capacities, cap, clift, cdrag, t1, e1), axis=1)
     df1 = pd.DataFrame(df0)
-    writer = pd.ExcelWriter('endurance_data7.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter('mass_power_sweep.xlsx', engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
@@ -546,11 +552,81 @@ def accumulator_points():
 
 
 
+def skidpad_test():
+    high_downforce_reference_file = 'AeroLap.xlsx'
+    no_aero_reference_file = 'NoAeroLap.xlsx'
+
+    files_to_compare = [high_downforce_reference_file, no_aero_reference_file]
+
+    laptimes = []
+    energies = []
+
+    for filename in files_to_compare:
+
+        data = pd.io.excel.read_excel(filename)
+
+        # Convert all our data to floats
+        times = data.loc[:, "TimeStamp"]                                    # time in seconds
+        times = times.astype(float)
+
+        # Convert all our data to floats
+        total_energy_depleted = data.loc[:, "Total_Energy"]                 # energy in joules
+        total_energy_depleted = total_energy_depleted.astype(float)
+        total_energy_depleted = total_energy_depleted/(3.6*10**6)           # energy in kWh
+
+
+
+        skidpad_laptime = times.iloc[-1] - times.iloc[0]
+        skidpad_energy = total_energy_depleted.iloc[-1] - total_energy_depleted.iloc[0]      
+
+        laptimes.append(skidpad_laptime)
+        energies.append(skidpad_energy)
+
+    print("With aero: {} s; {} kWh".format(laptimes[0], energies[0]))
+    print("Without aero: {} s; {} kWh".format(laptimes[1], energies[1]))
+
+
+'''
+
+With aero: 5.88 s; 0.0029250976696563887 kWh
+Without aero: 6.2 s; 0.0063582105931661095 kWh
+
+
+We have about a 2x energy discrepancy between the two, which we don't see in the point mass model.
+
+I think it's best to scale our future energy outputs using the "without aero" data, as this lines up the best with info from RIT
+-> Info we used to scale our simulated energy output using their car to RIT's reported energy output
+-> We only did a few trials of the experiment in person, so we excpect some variation 
+-> We'd like to see more tests to hone in on this 
+
+High downforce:
+3.8232602907860653 s;    0.015720931645166036 kWh
+
+
+
+No aero:
+3.901133239998655 s;    0.01552799231063735 kWh
+
+
+Skidpad scale factor: 
+
+0.0063582105931661095 / 0.01552799231063735
+
+energy_new = energy_predicted * skidpad scale factor
+
+
+
+'''
+
+#skidpad_test()
+
 aero_sweep()
 
 #autoX_sweep()
 
 #points_from_spreadsheet()
+
+
 
 
 '''
@@ -605,5 +681,21 @@ Chris's note
 '''
 Skidpad energy and laptime from sim
 
+
+'''
+
+
+'''
+We have a < 0.1 s laptime difference between aero and no aero for our simulated skidpad  ; extra downforce doesn't help much
+    -> We get laptimes of about 3.8 seconds, significantly faster than the real thing--could be grip factor, but honestly this is a tires issue
+            We do not incorporate Pacejka or any of our fancy two-track tire stuff here
+    -> We're not grip-limited; we are 
+    -> Imma be real Ben, my brain hurts and idk why this discrepancy is so small besides point mass bad
+    -> The average velocities of these runs were about 17-19 m/s (no aero), (high downforce); at this speed, drag shouldn't be thaaat significant
+    -> 
+
+In reality, we get a ~0.3 s laptime difference between aero and non-aero for the skidpad; a 5% difference 
+    -> The actual laptimes Chris got were about 6 s
+    -> 
 
 '''

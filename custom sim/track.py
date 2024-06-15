@@ -24,7 +24,7 @@ mesh_size = 0.25 # [m]
 
 
 # Track excel file selection
-filename = 'track_files/Michigan_2021_Endurance.xlsx'
+filename = 'track_files/test_track.xlsx'
 info = read_info(filename,'Shape')
 
 
