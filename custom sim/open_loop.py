@@ -1,5 +1,5 @@
 '''
-This will be the main file
+Run a regular lap sim. Run simulate_endurance to run your simulation.
 '''
 import numpy as np
 import lap_utils

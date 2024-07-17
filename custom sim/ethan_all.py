@@ -1,6 +1,5 @@
 '''
-Rudimentary version of OpenAll for the custom point mass model
-
+Functions to process results output from open_loop.
 '''
 import vehicle
 import open_loop

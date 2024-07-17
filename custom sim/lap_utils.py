@@ -1,3 +1,7 @@
+'''
+Outsourced mathematical tools for sims. Hide the ugly stuff in here.
+'''
+
 import numpy as np
 from scipy.interpolate import interp1d
 
