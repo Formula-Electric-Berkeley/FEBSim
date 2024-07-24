@@ -242,7 +242,7 @@ def vehicle_model_lat(veh, tr, p):
                 engine_force_func = interp1d(veh.vehicle_speed, veh.factor_power * veh.fx_engine)
                 ax_power_limit = 1 / M * engine_force_func(v)
                 ay = ay_max * np.sqrt(1 - (ax_drag / ax_tyre_max_acc)**2)
-                ax_acc = ax_tyre_max_acc * np.sqrt(1 - (ay_needed / ay_max)**2)
+                ax_acc = ax_tyre_max_acc * np.sqrt(max(0, 1 - (ay_needed / ay_max)**2))
                 scale = min([-ax_drag, ax_acc]) / ax_power_limit
                 tps = max([min([1, scale]), 0])              
                 bps = 0

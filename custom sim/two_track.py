@@ -1,3 +1,7 @@
+'''
+More advanced model for laptime simulation. 
+'''
+
 import numpy as np
 import casadi as ca
 import pandas as pd

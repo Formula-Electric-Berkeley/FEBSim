@@ -52,11 +52,6 @@ def simulate(pack):
     if len(apex)==0:
         apex = np.argmin(v_max)
         v_apex = v_max[apex]
-
-    
-    
-   
-    
     
     # Reordering apexes for solver time optimization
     old_apexes = v_apex #for plotting later
@@ -67,8 +62,6 @@ def simulate(pack):
     apex = apex_table[:, 1]
     
     apex = apex.astype(int)
-    
-    
 
     # Getting driver inputs at apexes
     tps_apex = tps_v_max[apex]

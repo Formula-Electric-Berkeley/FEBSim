@@ -55,9 +55,9 @@ def points_estimate(numLaps, time_endurance, energy_endurance, time_autoX, time_
     # endurance time and energy are for the whole race (22 laps)
     # autoX and acceleration times are for 1 run
 
-    reference_values = [1473.68, 
-                        46.85, 
-                        3.65, 
+    reference_values = [1473.68,  # Minimum endurance time
+                        46.85,    # Minimum autocross time
+                        3.65,     # Minimum acceleration time
                         1.75, 
                         0.243, 
                         0.841] 
@@ -482,7 +482,6 @@ def optimize_accel(possible_packs, numLaps):
     df1 = pd.DataFrame(df0, columns = ['Accel Laptime (s)', 'Accel Energy (kWh)'])
     return df1 
 
-
 def accumulator_points():
     ptsRef_filename = 'SN3_Points_Reference.xlsx'
 
@@ -507,8 +506,6 @@ def accumulator_points():
     endurance_data = optimize_endurance(endurance_trackfile, possible_packs, power_caps, numEnduranceLaps, end_header)
     autoX_data = optimize_autoX(autoX_trackfile, possible_packs, power_caps, numAutoXLaps, autoX_header)
     accel_data = optimize_accel(possible_packs, numAutoXLaps)
-
-
 
     # Calculate the points
 
@@ -549,8 +546,6 @@ def accumulator_points():
     output_df.to_excel(writer, sheet_name='Sheet1', index=False)
     writer.close()
 
-
-
 def skidpad_test():
     high_downforce_reference_file = 'AeroLap.xlsx'
     no_aero_reference_file = 'NoAeroLap.xlsx'
@@ -583,6 +578,54 @@ def skidpad_test():
 
     print("With aero: {} s; {} kWh".format(laptimes[0], energies[0]))
     print("Without aero: {} s; {} kWh".format(laptimes[1], energies[1]))
+
+def get_points():
+    cap = 30 # kW
+    endurance_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
+    
+    track.reload(endurance_trackfile)
+    vehicle.soft_reload(vehicle.M, power_cap = cap)
+
+    numEnduranceLaps = 22
+    
+    pack_info = {
+        "series": 14, 
+        "parallel": 4,
+        "segment": 10
+    }
+    pack = accumulator.Pack()
+    pack.pack(pack_info["series"], pack_info["parallel"], pack_info["segment"])
+
+    autocross_time, autocross_energy, _ = open_loop.simulate(pack)
+
+    print(f"Autocross completed in {round(autocross_time, 2)} seconds using {round(autocross_energy, 2)} kJ.")
+
+    # We make an assumption that the car doesn't hit any cones and doesn't miss any gates
+
+    min_time = 46.776 # Taken from score document here https://www.sae.org/binaries/content/assets/cm/content/attend/student-events/results/formula-sae/fsae_ev_2024_results.pdf
+    max_time = 1.45 * min_time
+
+    # Read more here https://www.fsaeonline.com/cdsweb/gen/DocumentResources.aspx
+    if autocross_time <= max_time:
+        # The denominator should always be 0.45, but this is how it's written in the document so I'm leaving it.
+        autocross_score = 118.5 * ((max_time / autocross_time) - 1) / ((max_time / min_time) - 1) + 6.5
+    else:
+        autocross_score = 6.5
+
+    pack.reset()
+    endurance_time, endurance_energy, _ = open_loop.simulate_endurance(pack, numEnduranceLaps)
+
+    print(f"Endurance completed in {round(endurance_time, 2)} seconds using {round(endurance_energy, 2)} kJ.")
+
+    min_time = 1581.258
+    max_time = 1.45 * min_time
+
+    if endurance_time <= max_time:
+        endurance_score = 250 * ((max_time / endurance_time) - 1) / ((max_time / min_time) - 1)
+    else:
+        endurance_score = 0
+
+    return autocross_score, endurance_score
 
 
 '''
@@ -619,14 +662,14 @@ energy_new = energy_predicted * skidpad scale factor
 
 #skidpad_test()
 
-aero_sweep()
+# aero_sweep()
 
 #autoX_sweep()
 
 #points_from_spreadsheet()
 
 
-
+print(get_points())
 
 '''
 To validate aero package addition / removal
