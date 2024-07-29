@@ -30,7 +30,7 @@ def calculate_efficiency_factor(avg_laptime, energy_drain):
     co2_yours = co2_yours / 22                  # avg adjusted kg CO2 per lap
     RIT_factor = t_min/t_yours * co2_min / co2_yours
     RIT_score = 100 * (RIT_factor-eff_factor_min)/(eff_factor_max-eff_factor_min)
-
+    
     print(RIT_factor)
     print(RIT_score)
     print(eff_factor_min)
@@ -225,7 +225,6 @@ def autoX_sweep():
 # alter this as needed, depending on what we want to sweep
 def aero_sweep():    
     # used for points estimation
-    ptsRef_filename = 'SN3_Points_Reference.xlsx'
     numLaps = 22
 
     # loop over various motor_curves

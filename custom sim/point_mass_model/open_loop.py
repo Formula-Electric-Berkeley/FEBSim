@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 
 # import our accumulator and motor models
 import accumulator
-import motor_model
-motor = motor_model.motor()
+import powertrain_model
+motor = powertrain_model.motor()
 
 
 
@@ -420,6 +420,8 @@ def simulate(pack):
         
         V[i] = min(V[i], basespeed)
 
+
+
     # re-calculate laptime with base speed limitation    
     dt = np.divide(tr.dx, V)
     time = np.cumsum(dt)
@@ -470,11 +472,6 @@ def simulate_endurance(pack, numLaps):
         if quick_breaker:
             print("Pack failure on lap {}".format(lap+2))
             break
-
-    
-
-
-
     
     #basic_header = ['Laptimes (s)', 'Energy Drains (kWh)', 'Pack Failure']
     #basic_output = pd.DataFrame(data=zip(laptimes, energy_drains, pack_failure), columns=basic_header)
@@ -508,6 +505,8 @@ def simulate_pack(pack_data):
 
     file_name = f"openloop_out.csv"
     transient_output.to_csv(file_name, sep=',', encoding='utf-8', index=False)
+
+
 
 
 

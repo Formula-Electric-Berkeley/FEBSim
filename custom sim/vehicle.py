@@ -8,8 +8,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-import motor_model
-motor = motor_model.motor()
+import powertrain_model
+motor = powertrain_model.motor()
 
 def read_info(workbook_file, sheet_name=1, start_row=2, end_row=10000, cols="B:C"):
     # Setup the Import Options

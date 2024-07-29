@@ -182,11 +182,38 @@ class motor():
 
 
 
-    #motor_efficiency(2000, 150)
+    motor_efficiency(2000, 150)
 
+<<<<<<< Updated upstream:custom sim/motor_model.py
 def test_motor():
     motor().plot_motor_curve(30)
 
     
 #test_motor()
+=======
+    
+class drexler_differential():
+>>>>>>> Stashed changes:custom sim/powertrain_model.py
 
+    def __init__(self):
+        ramp_angles =       [30, 40, 45, 50, 60] # degrees
+        lock_up_percents =  [88, 60, 51, 42, 29] # %
+
+        # SN3 differential:
+        # Acceleration ramp angle: 45
+        # Braking ramp angle: 60
+
+        self.forward_lock_up_percent = 0.51
+        self.reverse_lock_up_percent = 0.29
+
+    # Return the torque supplied by the differential for a given applied torque
+    # Make this functionally dependent on wheel speed later
+    def get_torque(self, applied_torque):
+        
+        if applied_torque > 0:
+            # Accelerating 
+            self.forward_lock_up_percent*applied_torque
+        
+        else:
+            # Braking
+            self.reverse_lock_up_percent*np.abs(applied_torque)

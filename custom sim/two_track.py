@@ -9,9 +9,9 @@ import pandas as pd
 import track as tr
 import vehicle as veh
 
-import motor_model
+import powertrain_model
 from scipy.interpolate import interp1d
-motor = motor_model.motor()
+motor = powertrain_model.motor()
 
 # Define constants
 mu = 0.75  # coefficient of friction for tires
@@ -665,6 +665,11 @@ def opt_mintime():
         lbg.append([0.0] * nx)
         ubg.append([0.0] * nx)
 
+
+
+
+    
+
         # path constraint: f_drive * f_brake == 0 (no simultaneous operation of brake and accelerator pedal)
         g.append(Uk[1] * Uk[2])
         lbg.append([0.0])
@@ -791,26 +796,64 @@ def opt_mintime():
 
             #TODO start here!!!!!!!
 
-            '''
-            # do both of the back wheels need to have the same angular velocity 
-            # there is some difference in slip, but this could be because the velocity projection is different
-            # motor and brake torques are the same, but if grip torques are ever different (i.e. different velocity projection or slip angle), then ws would differ
-            # UNLESS we actively constrain that
+        '''
+        # do both of the back wheels need to have the same angular velocity 
+            They do not! That's what the differential is for
 
-            torque_max_motor = f(angular speed of back axle, power cap)
-            torque_commanded - torque_max_motor <= 0
+        
+        Include efficiencies at each step of the powertrain later
+            - Differential
 
-            '''
+
+        HOW TO IMPLEMENT POWERTRAIN
+        0. Define some TBR, and use this value to propagate motor torque to the wheels
+        1. Determine the effective shaft speed -> motor speed using TBR from the wheel speeds
+        2. Use CasADi interpolator to constrain motor torque based on the predicted motor speed
+        
+
+        torque_wheel = 0.5*torque_total +/- 0.5*torque_total * (TBR - 1) / (TBR + 1)
+
+        N_wl = wheel_speed_bl =   
+        
+        if rear left wheel has more torque (i.e. N_wl < N_wr usually):
+            N_effective = ( N_wl + N_wr * TBR ) / (1 + 1/TBR)
+
+        else:
+            N_effective = ( N_wr + N_wl * TBR ) / (1 + 1/TBR)
+
+        N_driveshaft = N_effective * gear_ratio_differential
+
+        N_motor = N_driveshaft * gear_ratio_transmission
+
+        
+        TBR is the ratio of the torque delivered to the wheel with more traction (the more heavily loaded wheel)
+        *Based on the sign of lateral load transfer, TBR is + or -
+
+
+        TBR can be a variable parameter that we optimize within some range; based on the sign of gamma_x, we set individual torques depending on TBR
+
+
+        We have a 1.5-way diff; we need to model it differently in acceleration and braking; check the powertrain documentation for more info: https://www.notion.so/Differential-Tuning-and-Oiling-21440883d6824d119740329940faa12a
+
+        
+
+        '''
                 
 
         # ENERGISTICS TODO
 
         """
+        Remaining major to-dos
+        1. Implement LSD differential
+            - Implement the motor curve 
+            - constrain motor torque based on motor speed
+        2. Find the motor efficiency based on the motor torque and speed
+        3. Optimize code
+
         Based on our commanded torque and velocity, we can find where on the motor efficiency curve we are
         This can determine our regen efficiency
         We can also add a variable/functional power cap to limit rate of regen
 
-        Energy consumption can come from 
         """
 
         # After we constrain Xk and Uk, add them to our control vectors
