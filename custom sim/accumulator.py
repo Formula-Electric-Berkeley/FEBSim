@@ -203,7 +203,7 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
     # gets dV/dQ at our desired capacity and current
     def get_derivative(self, capacity, target_current):
         # currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps; use this for Molicell
-        currents = [0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0]
+        currents = [0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0]   # Use this for Energus (SN3)
 
 
         # calculate the numerical derivative of V with respect to Capacity for each curve

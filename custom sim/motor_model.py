@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.interpolate import griddata
+import matplotlib.pyplot as plt
 
 import matplotlib.pyplot as plt
 
@@ -34,6 +35,11 @@ class motor():
 
         
         return self.motor_speed, torque_capped
+    
+    def plot_motor_curve(self, power_cap):
+        speed, torque = self.get_motor_curve(power_cap)
+        plt.plot(speed, torque)
+        plt.show()
     
     # Helper function to get the corresponding motor torque given a motor speed at our power cap 
     def get_torque_from_motor_speed(self, known_motor_speed, power_cap):
@@ -178,5 +184,9 @@ class motor():
 
     #motor_efficiency(2000, 150)
 
+def test_motor():
+    motor().plot_motor_curve(30)
+
     
+#test_motor()
 

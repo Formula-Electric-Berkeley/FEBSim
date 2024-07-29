@@ -581,9 +581,9 @@ def skidpad_test():
 
 def get_points():
     cap = 30 # kW
-    endurance_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
+    autoX_trackfile = "Michigan_2022_AutoX.xlsx" # Placeholder
     
-    track.reload(endurance_trackfile)
+    track.reload(autoX_trackfile)
     vehicle.soft_reload(vehicle.M, power_cap = cap)
 
     numEnduranceLaps = 22
@@ -593,12 +593,18 @@ def get_points():
         "parallel": 4,
         "segment": 10
     }
+
     pack = accumulator.Pack()
     pack.pack(pack_info["series"], pack_info["parallel"], pack_info["segment"])
 
     autocross_time, autocross_energy, _ = open_loop.simulate(pack)
 
-    print(f"Autocross completed in {round(autocross_time, 2)} seconds using {round(autocross_energy, 2)} kJ.")
+    print(f"Autocross completed in {round(autocross_time, 2)} seconds using {round(autocross_energy, 2)} kWh.")
+
+
+    # Load the endurance track
+    endurance_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
+    track.reload(endurance_trackfile)
 
     # We make an assumption that the car doesn't hit any cones and doesn't miss any gates
 
@@ -612,6 +618,8 @@ def get_points():
     else:
         autocross_score = 6.5
 
+    return autocross_score
+'''
     pack.reset()
     endurance_time, endurance_energy, _ = open_loop.simulate_endurance(pack, numEnduranceLaps)
 
@@ -625,7 +633,7 @@ def get_points():
     else:
         endurance_score = 0
 
-    return autocross_score, endurance_score
+    return autocross_score, endurance_score'''
 
 
 '''
