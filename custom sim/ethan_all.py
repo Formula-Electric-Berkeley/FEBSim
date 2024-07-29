@@ -578,12 +578,16 @@ def skidpad_test():
     print("With aero: {} s; {} kWh".format(laptimes[0], energies[0]))
     print("Without aero: {} s; {} kWh".format(laptimes[1], energies[1]))
 
+
+
+
+
+
 def get_points():
     cap = 30 # kW
-    autoX_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
+    autoX_trackfile = "Michigan_2022_AutoX.xlsx" # Placeholder
     
     track.reload(autoX_trackfile)
-    vehicle.soft_reload(vehicle.M, power_cap = cap)
 
     numEnduranceLaps = 22
     
@@ -593,8 +597,15 @@ def get_points():
         "segment": 10
     }
 
+    # Establish the pack before reloading the vehicle
     pack = accumulator.Pack()
     pack.pack(pack_info["series"], pack_info["parallel"], pack_info["segment"])
+
+    pack.reset()        # Useful to do at the beginning 
+
+    aero = [-1.23, -0.93]
+
+    vehicle.soft_reload(vehicle.M, power_cap = cap, new_aero= aero)
 
     autocross_time, autocross_energy, _ = open_loop.simulate(pack)
 
@@ -617,8 +628,6 @@ def get_points():
     else:
         autocross_score = 6.5
 
-    return autocross_score
-'''
     pack.reset()
     endurance_time, endurance_energy, _ = open_loop.simulate_endurance(pack, numEnduranceLaps)
 
@@ -632,8 +641,10 @@ def get_points():
     else:
         endurance_score = 0
 
-    return autocross_score, endurance_score'''
+    return autocross_score, endurance_score
 
+#get_points()
+aero_sweep()
 
 '''
 
@@ -675,8 +686,6 @@ energy_new = energy_predicted * skidpad scale factor
 
 #points_from_spreadsheet()
 
-
-print(get_points())
 
 '''
 To validate aero package addition / removal
