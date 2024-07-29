@@ -580,7 +580,7 @@ def skidpad_test():
 
 def get_points():
     cap = 30 # kW
-    autoX_trackfile = "Michigan_2022_AutoX.xlsx" # Placeholder
+    autoX_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
     
     track.reload(autoX_trackfile)
     vehicle.soft_reload(vehicle.M, power_cap = cap)

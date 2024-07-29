@@ -182,19 +182,14 @@ class motor():
 
 
 
-    motor_efficiency(2000, 150)
 
-<<<<<<< Updated upstream:custom sim/motor_model.py
 def test_motor():
     motor().plot_motor_curve(30)
 
     
 #test_motor()
-=======
     
 class drexler_differential():
->>>>>>> Stashed changes:custom sim/powertrain_model.py
-
     def __init__(self):
         ramp_angles =       [30, 40, 45, 50, 60] # degrees
         lock_up_percents =  [88, 60, 51, 42, 29] # %
