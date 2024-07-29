@@ -585,7 +585,7 @@ def skidpad_test():
 
 def get_points():
     cap = 30 # kW
-    autoX_trackfile = "Michigan_2022_AutoX.xlsx" # Placeholder
+    autoX_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
     
     track.reload(autoX_trackfile)
 
@@ -611,7 +611,7 @@ def get_points():
 
     print(f"Autocross completed in {round(autocross_time, 2)} seconds using {round(autocross_energy, 2)} kWh.")
 
-
+    '''
     # Load the endurance track
     endurance_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
     track.reload(endurance_trackfile)
@@ -642,9 +642,10 @@ def get_points():
         endurance_score = 0
 
     return autocross_score, endurance_score
+    '''
 
-#get_points()
-aero_sweep()
+get_points()
+#aero_sweep()
 
 '''
 

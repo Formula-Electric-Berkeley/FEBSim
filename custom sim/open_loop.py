@@ -119,7 +119,7 @@ def simulate(pack):
                     #print("j = {} | | v = {}".format(j, v[j_next, i, k]))
                     # Checking for limit
                     if overshoot:
-                        #print("Overshot")
+                        #print("Overshot at ", j_next)
                         break
                     # Checking if the point is already solved in the other apex iteration
                     if flag[j, k] or flag[j, k_rest]:
@@ -220,6 +220,12 @@ def simulate(pack):
     if (V[-1] == np.inf):
         V[-1] = V[-2]
 
+
+
+    # TODO: 7/29/24; problem with 0 TPS, infinite V on endurance track showed up -- even in old versions, on new computer; this is a hotfix
+    finite_velocities = V[np.isfinite(V)]
+    minV = np.min(finite_velocities)
+    V[np.isinf(V)] = minV
     
 
     # Interpolate wheel torque
@@ -228,9 +234,9 @@ def simulate(pack):
     wheel_torque = TPS * torque_func(V)
     motor_torque = wheel_torque / (veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final*veh.n_primary*veh.n_gearbox*veh.n_final)
 
-    print(V[280:298])
-    print(TPS[280:298])
-    print(torque_func(V)[280:298])
+    print(V[3444:3463])
+    print(TPS[3444:3463])
+    print(torque_func(V)[3444:3463])
     print(np.where(np.isnan(wheel_torque)))
 
     #Power regen
