@@ -584,8 +584,16 @@ def skidpad_test():
 
 
 def get_points():
+    mass_with_aero = 245.0 # kg
+    driver_mass = 45.0 # kg
+    mass = mass_with_aero + driver_mass
+
+    # No aero
+    no_aero = [-0.05, -0.52]
+    mass -= 14
+
     cap = 30 # kW
-    autoX_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
+    autoX_trackfile = "Michigan_2022_AutoX.xlsx" # Placeholder
     
     track.reload(autoX_trackfile)
 
@@ -603,21 +611,21 @@ def get_points():
 
     pack.reset()        # Useful to do at the beginning 
 
-    aero = [-1.23, -0.93]
+    # Load high df for autoX
+    high_downforce = [-1.98, -1.33]
 
-    vehicle.soft_reload(vehicle.M, power_cap = cap, new_aero= aero)
+    # Load low drag config aero for endurance
+    low_drag = [-1.23, -0.93]
+
+    vehicle.soft_reload(mass, power_cap = cap, new_aero= no_aero)
 
     autocross_time, autocross_energy, _ = open_loop.simulate(pack)
 
     print(f"Autocross completed in {round(autocross_time, 2)} seconds using {round(autocross_energy, 2)} kWh.")
 
-    '''
-    # Load the endurance track
-    endurance_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
-    track.reload(endurance_trackfile)
+    # Calculate autoX points
 
     # We make an assumption that the car doesn't hit any cones and doesn't miss any gates
-
     min_time = 46.776 # Taken from score document here https://www.sae.org/binaries/content/assets/cm/content/attend/student-events/results/formula-sae/fsae_ev_2024_results.pdf
     max_time = 1.45 * min_time
 
@@ -627,11 +635,24 @@ def get_points():
         autocross_score = 118.5 * ((max_time / autocross_time) - 1) / ((max_time / min_time) - 1) + 6.5
     else:
         autocross_score = 6.5
+    
+
+
+    # Load the endurance track and reset the vehicle
+    endurance_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
+    # Set grip factor of 0.7
+    track.reload(endurance_trackfile, grip=0.7)
+    cap = 20
 
     pack.reset()
+    vehicle.soft_reload(mass, power_cap = cap, new_aero= no_aero)
+    
+    
+
+
     endurance_time, endurance_energy, _ = open_loop.simulate_endurance(pack, numEnduranceLaps)
 
-    print(f"Endurance completed in {round(endurance_time, 2)} seconds using {round(endurance_energy, 2)} kJ.")
+    print(f"Endurance completed in {round(endurance_time, 2)} seconds using {round(endurance_energy, 2)} kWh.")
 
     min_time = 1581.258
     max_time = 1.45 * min_time
@@ -641,10 +662,15 @@ def get_points():
     else:
         endurance_score = 0
 
-    return autocross_score, endurance_score
-    '''
+    # Also we get a +25 "laps" score
 
-get_points()
+    # Efficiency score is still a little wonky
+
+
+    return autocross_score, endurance_score
+    
+
+#print(get_points())
 #aero_sweep()
 
 '''

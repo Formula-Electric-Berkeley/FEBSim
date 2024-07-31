@@ -234,10 +234,13 @@ def simulate(pack):
     wheel_torque = TPS * torque_func(V)
     motor_torque = wheel_torque / (veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final*veh.n_primary*veh.n_gearbox*veh.n_final)
 
+    # TODO; debugging for outstanding error
+    '''
     print(V[3444:3463])
     print(TPS[3444:3463])
     print(torque_func(V)[3444:3463])
     print(np.where(np.isnan(wheel_torque)))
+    '''
 
     #Power regen
     brake_force = BPS/veh.beta                          # F_brake = BPS/veh.beta

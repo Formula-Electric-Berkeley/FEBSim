@@ -113,7 +113,7 @@ info.config = 'Closed'
 curvatures = r
 
 
-def reload(trackfile):
+def reload(trackfile, grip = 0):
     global x
     global r
     global n
@@ -192,7 +192,11 @@ def reload(trackfile):
     # Fine turn direction vector
     t = np.sign(r)
 
-    factor_grip = np.ones(n)
+    if grip == 0:
+        factor_grip = np.ones(n)
+    else:
+        factor_grip = np.ones(n)*grip
+        
     bank = np.zeros(n)
     incl = np.zeros(n)
     
