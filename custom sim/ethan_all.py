@@ -49,7 +49,6 @@ def calculate_efficiency_factor(avg_laptime, energy_drain):
 
     return eff_factor, Points
 
-
 # estimate the number of points we will get with the car
 def points_estimate(numLaps, time_endurance, energy_endurance, time_autoX, time_acceleration): 
     # endurance time and energy are for the whole race (22 laps)
@@ -197,11 +196,6 @@ def autoX_sweep():
             else:
                 print("Pack failure at {}".format(power_cap))
 
-
-    
-
-
-
     # Output everything using Pandas
     header = ['Mass (kg)', 'Capacity (kWh)', 'Power Cap (kW)', 'Cls', 'Cds', 'AutoX Laptime (s)', 'AutoX Energy (kWh)', 'Accel Laptime (s)']
 
@@ -214,7 +208,6 @@ def autoX_sweep():
     e1 = np.vstack(Es)
     acc = np.vstack(accel_times)
   
-
     df0 = np.concatenate((m, Capacities, cap, clift, cdrag, t1, e1, acc), axis=1)
     df1 = pd.DataFrame(df0)
     writer = pd.ExcelWriter('autoX_data2.xlsx', engine='xlsxwriter')
@@ -314,10 +307,12 @@ def aero_sweep():
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
-     
 
-# Estimate points for previously run outputs of endurance, autoX, and accel
+
 def points_from_spreadsheet():
+    '''
+    Estimate points for previously run outputs of endurance, autoX, and accel
+    '''
     numEnduranceLaps = 22
 
     endurance_reference_file = "endurance_data6.xlsx"
@@ -360,10 +355,12 @@ def points_from_spreadsheet():
     points_data.to_excel(writer, sheet_name='Sheet1', index=False)
     writer.close()
 
-def optimize_endurance(endurance_trackfile, possible_packs, power_caps, numLaps, header):
+
+def optimize_endurance(possible_packs, power_caps, numLaps, header, endurance_trackfile=None):
     
     # load our endurance track into the sim
-    track.reload(endurance_trackfile)
+    if endurance_trackfile:
+        track.reload(endurance_trackfile)
 
     # set up our output vectors
     masses = []
@@ -376,7 +373,7 @@ def optimize_endurance(endurance_trackfile, possible_packs, power_caps, numLaps,
     dropped_laps = []
 
     #car mass in kg, no cells, with driver weight 80kg (from SN3 mass spec sheet)
-    base_mass = 172.1+80    
+    base_mass = 172.1+80
     
     # loop over all packs and try to find the fastest laptime that still completes
     for i, pack_dimension in enumerate(possible_packs):      
@@ -393,7 +390,6 @@ def optimize_endurance(endurance_trackfile, possible_packs, power_caps, numLaps,
         masses.append(cell_mass+base_mass)
         pack_names.append(cell_data["name"])
         capacities.append(cell_data["capacity"]/1000)       # in kWh
-
 
         # index of power caps at each point
         j1 = 0
@@ -436,6 +432,75 @@ def optimize_endurance(endurance_trackfile, possible_packs, power_caps, numLaps,
     df1 = pd.DataFrame(df0, columns=header)
     return df1
     
+
+def sweep_mass_packs(pack_setups, masses, power_caps, num_laps = 22, base_mass = 172.1 + 80, endurance_track_file=None):
+    '''
+    Sweep through pack and mass settings for running endurance.
+
+    TODO: Why are our pack setups being sent around as lists with an arbitrary order - we
+    should probably be using dicts (or sumn) but im not gonna fuck with the status quo just yet.
+    '''
+
+    power_caps = list(reversed(sorted(power_caps))) # make sure we're attempting the highest first
+
+    if endurance_track_file:
+        track.reload(endurance_track_file)
+
+    run_data = []
+
+    for pack_setup in pack_setups:
+        print(f"Testing a {pack_setup} pack")
+
+        series, parallel, segment = pack_setup
+
+        pack = accumulator.Pack()
+        pack.pack(series, parallel, segment)
+        
+        pack_info = pack.get_cell_data()
+        pack_mass = pack_info["weight"] / 1000 # unit conversion
+
+        for base_mass in masses:
+            print(f"Base mass {base_mass}")
+            total_mass = base_mass + pack_mass
+
+            i = 0
+            cap_failing = True
+
+            race_time = 0
+            energy = 0
+
+            while cap_failing:
+                cap = power_caps[i]
+
+                pack.reset()
+
+                vehicle.soft_reload(total_mass, cap)
+
+                race_time, energy, failure = open_loop.simulate_endurance(pack, num_laps)
+
+                i += 1
+
+                if not failure or i == len(power_caps):
+                    break
+                
+                print(f"{cap} kW failed, reducing.")
+            
+            
+            run_data.append([
+                base_mass, 
+                total_mass, 
+                series, 
+                parallel, 
+                segment, 
+                cap, 
+                race_time, 
+                energy
+            ])
+    
+
+
+    return pd.DataFrame(run_data, columns=["Base mass (kg)", "Mass with pack (kg)", "Pack series", "Pack parallel", "Pack segment", "Power capacity (kW)", "Endurance time (s)", "Endurance energy (kWh)"])
+
 # use the old 4x4 if necessary, but consumption seemed negligible
 def optimize_autoX(autoX_trackfile, possible_packs, power_caps, numLaps, autoX_header):
     # optimization is the same for endurance and autoX
@@ -444,6 +509,7 @@ def optimize_autoX(autoX_trackfile, possible_packs, power_caps, numLaps, autoX_h
     # drop the first 3 columns for redundancy
     df2 = df2.drop(columns=['Pack Config', 'Mass (kg)', 'Capacity (kWh)'], axis=1)
     return df2
+
 
 def optimize_accel(possible_packs, numLaps):
     accel_times = []
@@ -480,6 +546,7 @@ def optimize_accel(possible_packs, numLaps):
 
     df1 = pd.DataFrame(df0, columns = ['Accel Laptime (s)', 'Accel Energy (kWh)'])
     return df1 
+
 
 def accumulator_points():
     ptsRef_filename = 'SN3_Points_Reference.xlsx'
@@ -545,6 +612,7 @@ def accumulator_points():
     output_df.to_excel(writer, sheet_name='Sheet1', index=False)
     writer.close()
 
+
 def skidpad_test():
     high_downforce_reference_file = 'AeroLap.xlsx'
     no_aero_reference_file = 'NoAeroLap.xlsx'
@@ -577,10 +645,6 @@ def skidpad_test():
 
     print("With aero: {} s; {} kWh".format(laptimes[0], energies[0]))
     print("Without aero: {} s; {} kWh".format(laptimes[1], energies[1]))
-
-
-
-
 
 
 def get_points():
@@ -635,8 +699,6 @@ def get_points():
         autocross_score = 118.5 * ((max_time / autocross_time) - 1) / ((max_time / min_time) - 1) + 6.5
     else:
         autocross_score = 6.5
-    
-
 
     # Load the endurance track and reset the vehicle
     endurance_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
@@ -646,9 +708,6 @@ def get_points():
 
     pack.reset()
     vehicle.soft_reload(mass, power_cap = cap, new_aero= no_aero)
-    
-    
-
 
     endurance_time, endurance_energy, _ = open_loop.simulate_endurance(pack, numEnduranceLaps)
 
@@ -666,11 +725,18 @@ def get_points():
 
     # Efficiency score is still a little wonky
 
-
     return autocross_score, endurance_score
     
 
-#print(get_points())
+print(sweep_mass_packs(
+    [(14, 4, 10),
+      (16, 4, 10), (10, 4, 10)
+      ], 
+    [325, 
+     300, 275
+     ], 
+    [50, 40, 30, 20, 10]
+))
 #aero_sweep()
 
 '''
