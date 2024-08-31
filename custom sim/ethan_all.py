@@ -469,7 +469,7 @@ def sweep_mass_packs(pack_setups, masses, power_caps, num_laps = 22, base_mass =
             race_time = 0
             energy = 0
 
-            while cap_failing:
+            while True:
                 cap = power_caps[i]
 
                 pack.reset()
@@ -481,6 +481,7 @@ def sweep_mass_packs(pack_setups, masses, power_caps, num_laps = 22, base_mass =
                 i += 1
 
                 if not failure or i == len(power_caps):
+                    cap_failing = False
                     break
                 
                 print(f"{cap} kW failed, reducing.")
@@ -494,12 +495,13 @@ def sweep_mass_packs(pack_setups, masses, power_caps, num_laps = 22, base_mass =
                 segment, 
                 cap, 
                 race_time, 
-                energy
+                energy, 
+                cap_failing
             ])
     
 
 
-    return pd.DataFrame(run_data, columns=["Base mass (kg)", "Mass with pack (kg)", "Pack series", "Pack parallel", "Pack segment", "Power capacity (kW)", "Endurance time (s)", "Endurance energy (kWh)"])
+    return pd.DataFrame(run_data, columns=["Base mass (kg)", "Mass with pack (kg)", "Pack series", "Pack parallel", "Pack segment", "Power capacity (kW)", "Endurance time (s)", "Endurance energy (kWh)", "Failed"])
 
 # use the old 4x4 if necessary, but consumption seemed negligible
 def optimize_autoX(autoX_trackfile, possible_packs, power_caps, numLaps, autoX_header):
@@ -728,15 +730,17 @@ def get_points():
     return autocross_score, endurance_score
     
 
-print(sweep_mass_packs(
+result = sweep_mass_packs(
     [(14, 4, 10),
-      (16, 4, 10), (10, 4, 10)
-      ], 
-    [325, 
-     300, 275
-     ], 
-    [50, 40, 30, 20, 10]
-))
+    # (16, 4, 10), (10, 4, 10)
+    ],
+    list(range(190, 260, 10)),
+    [30]
+)
+
+print(result)
+result.to_csv("mass_sweep_output/result.csv")
+
 #aero_sweep()
 
 '''
