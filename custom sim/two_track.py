@@ -11,9 +11,12 @@ import vehicle as veh
 
 import powertrain_model
 from scipy.interpolate import interp1d
-motor = powertrain_model.motor()
 
-# Define constants
+# Instantiate the powertrain
+motor = powertrain_model.motor()
+diff = powertrain_model.drexler_differential()
+
+# Define tire constants
 mu = 0.75  # coefficient of friction for tires
 # pacejka model
 Bx = 16
@@ -302,7 +305,7 @@ def opt_mintime():
     Fy_fl = Flfl * ca.sin(delta) + Ftfl * ca.cos(delta)
     Fx_rr = Flrr
     Fy_rr = Ftrr
-    Fx_rl = Flrl
+    Fx_rl = Flrl    # Driven wheels are oriented parallel to the car in RWD
     Fy_rl = Ftrl
 
     # drag forces
@@ -380,6 +383,9 @@ def opt_mintime():
     # compute the rates of change of the wheel angular velocities (wheel speeds) based on the brake torque, drive torque, and grip forces
     wfr_dot = sf * (-Flfr * re + torque_brake_fr) / Jw
     wfl_dot = sf * (-Flfl * re + torque_brake_fl) / Jw
+
+    # For the driven wheels, 
+
     wrr_dot = (
         sf
         * (-Flrr * re + torque_brake_rr + torque_drive / 2)
@@ -391,6 +397,10 @@ def opt_mintime():
         / (Jw + Je * veh.ratio_final / 2)
     )
 
+    # If wrr_dot and wrl_dot are positive, we're accelerating. Otherwise, we're decelerating
+
+
+
     # define our driving dynamics with a series of ordinary differential equations
     dx = (
         ca.vertcat(
@@ -399,6 +409,8 @@ def opt_mintime():
         / x_s
     )
 
+
+    print("Dynamics Defined")
     # ------------------------------------------------------------------------------------------------------------------
     # CONTROL BOUNDARIES -----------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
@@ -668,7 +680,6 @@ def opt_mintime():
 
 
 
-    
 
         # path constraint: f_drive * f_brake == 0 (no simultaneous operation of brake and accelerator pedal)
         g.append(Uk[1] * Uk[2])
@@ -710,45 +721,52 @@ def opt_mintime():
 
 
         """
+        
+        '''
+        ##################### Implementation of the motor curve
+        
 
         # Power cap in kW; make this a control variable later
-        power_cap = 80
+        power_cap = 30
         
-        
-        # Determine the motor speed        
+        # Determine the motor speed in rad/s
         known_motor_speed = (Xk[7] + Xk[8]) / (2*veh.gear_ratio)
+        known_motor_speed = known_motor_speed * 30/np.pi # convert to rpm
 
         # Interpolate our motor curve to get the maximum allowed motor torque for this speed
-
         motor_speeds, motor_torques = motor.get_motor_curve(power_cap) #rpm, Nm
-        motor_speeds = motor_speeds * 2*np.pi/60 # convert from rpm to rads / s
+        
+        # Manually implement piecewise linear interpolation
+        motor_torque_max = ca.MX(0)
 
-        #interp_func = interp1d(motor_speeds, motor_torques)
-        torque_interpolated = ca.interpolant('torque_interpolated', 'linear', [motor_speeds], motor_torques)
+        # Forward difference linear interpolator
+        for i in range(1, len(motor_speeds)):
+            # Create conditions for the intervals
+            lower_bound = motor_speeds[i-1]
+            upper_bound = motor_speeds[i]
+            slope = (motor_torques[i] - motor_torques[i-1]) / (upper_bound - lower_bound)
+            intercept = motor_torques[i-1] - slope * lower_bound
 
-        # Interpolating the motor torque at known_wheel_speed
-        motor_torque_max = torque_interpolated(known_motor_speed)
-    
+            # Add conditionally interpolated torque to the sum
+            motor_torque_max += ca.fmax(0, ca.fmin(1, (known_motor_speed - lower_bound) / (upper_bound - lower_bound))) * (slope * known_motor_speed + intercept)
 
+        
 
         # Constrain our motor torque to be less than the maximum
+
         g.append(motor_torque_max - Uk[1])
         lbg.append([0.0])
         ubg.append([ca.inf])
 
-
-
-
-
-
-        
-
+        '''
 
 
 
         # TODO: remaining issues
         # fix alternating between drive and brake
         # fix hard steering
+
+        '''
 
         # limit rate of change of steering and drive commands (dynamic actuator constraints)
         delta_step = 4  # right now, we limit the rate of change of steering to be 1/4th the maximum value in a time-step
@@ -795,53 +813,10 @@ def opt_mintime():
 
 
             #TODO start here!!!!!!!
-
         '''
-        # do both of the back wheels need to have the same angular velocity 
-            They do not! That's what the differential is for
 
         
-        Include efficiencies at each step of the powertrain later
-            - Differential
-
-
-        HOW TO IMPLEMENT POWERTRAIN
-        0. Define some TBR, and use this value to propagate motor torque to the wheels
-        1. Determine the effective shaft speed -> motor speed using TBR from the wheel speeds
-        2. Use CasADi interpolator to constrain motor torque based on the predicted motor speed
-        
-
-        torque_wheel = 0.5*torque_total +/- 0.5*torque_total * (TBR - 1) / (TBR + 1)
-
-        N_wl = wheel_speed_bl =   
-        
-        if rear left wheel has more torque (i.e. N_wl < N_wr usually):
-            N_effective = ( N_wl + N_wr * TBR ) / (1 + 1/TBR)
-
-        else:
-            N_effective = ( N_wr + N_wl * TBR ) / (1 + 1/TBR)
-
-        N_driveshaft = N_effective * gear_ratio_differential
-
-        N_motor = N_driveshaft * gear_ratio_transmission
-
-        
-        TBR is the ratio of the torque delivered to the wheel with more traction (the more heavily loaded wheel)
-        *Based on the sign of lateral load transfer, TBR is + or -
-
-
-        TBR can be a variable parameter that we optimize within some range; based on the sign of gamma_x, we set individual torques depending on TBR
-
-
-        We have a 1.5-way diff; we need to model it differently in acceleration and braking; check the powertrain documentation for more info: https://www.notion.so/Differential-Tuning-and-Oiling-21440883d6824d119740329940faa12a
-
-        
-
-        '''
                 
-
-        # ENERGISTICS TODO
-
         """
         Remaining major to-dos
         1. Implement LSD differential
@@ -940,6 +915,7 @@ def opt_mintime():
     # ------------------------------------------------------------------------------------------------------------------
     # EXTRACT SOLUTION -------------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
+    
     """
     In this section, we format the result of the solver into a convenient output
     """
@@ -991,7 +967,7 @@ def opt_mintime():
     ]
 
     # Create a Pandas Excel writer using XlsxWriter as the engine
-    writer = pd.ExcelWriter("arrays13.xlsx", engine="xlsxwriter")
+    writer = pd.ExcelWriter("82324.xlsx", engine="xlsxwriter")
 
     # Write the dataframe to a excel sheet
     df1.to_excel(writer, sheet_name="Sheet1", index=False, header=header)

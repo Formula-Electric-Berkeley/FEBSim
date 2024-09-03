@@ -228,7 +228,7 @@ def aero_sweep():
     numLaps = 22
 
     # loop over various motor_curves
-    power_caps = [30, 24, 20, 15]
+    power_caps = [50, 40, 30, 20]
 
     # Cl, Cd
     aero_coefficients = [#[-1.98, -1.33],            # High downforce config; negative = downforce, + is lift
@@ -242,20 +242,15 @@ def aero_sweep():
     # driver weight:        80
 
 
-    pack_dimension = [14, 4, 10]
+    pack_dimension = [[14, 4, 8],
+                      [14, 5, 8],
+                      [16, 4, 8],
+                      [16, 5, 8]]
 
-    # initialize our pack
-    series, parallel, segment = pack_dimension
-    pack = accumulator.Pack()
-    pack.pack(series, parallel, segment)
-
-    # get the cell mass, name, and capacity for output
-    cell_data = pack.get_cell_data()
-    capacity = cell_data["capacity"]/1000       # in kWh
-
+    
     capacities = []
 
-    driver_masses = [45, 55, 65, 75, 90]
+    driver_masses = [-45, -30, -15, 0, 15, 30, 45, 60, 75]
     #base_mass = 231.0 + driver_mass
     with_aero = 245.0          # for high downforce config
 
@@ -276,23 +271,43 @@ def aero_sweep():
     #start endurance
     track.reload('Michigan_2021_Endurance.xlsx')
 
-    for i, mass in enumerate(masses):
-        for j, power_cap in enumerate(power_caps):
+    for pack_dim in pack_dimension:
+        # initialize our pack
+        series, parallel, segment = pack_dim
+        pack = accumulator.Pack()
+        pack.pack(series, parallel, segment)
 
-            aero_package = aero_coefficients[0]
-            pack.reset()
-            vehicle.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
+        # get the cell mass, name, and capacity for output
+        cell_data = pack.get_cell_data()
+        capacity = cell_data["capacity"]/1000       # in kWh
 
-            laptime, energy, pack_failed = open_loop.simulate_endurance(pack, numLaps)
+        for i, mass in enumerate(masses):
+            small_writer = pd.ExcelWriter('transient_data_{:}_{:}.xlsx'.format(cell_data["name"], mass), engine='xlsxwriter')
+            transient_header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)', 
+                        'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Motor Power (W)', 'Current Draw (A)']
 
-            if not (pack_failed):
-                end_times.append(laptime)
-                end_Es.append(energy)
-                caps.append(power_cap)
-                Ms.append(masses[i])
-                Cls.append(aero_package[0])
-                Cds.append(aero_package[1])
-                capacities.append(capacity)
+            for j, power_cap in enumerate(power_caps):
+                print("Beginning Endurance Run number {}".format(i))
+
+                aero_package = aero_coefficients[0]
+                pack.reset()
+                vehicle.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
+
+                laptime, energy, pack_failed, output_df = open_loop.simulate_endurance(pack, numLaps)
+
+                if not (pack_failed):
+                    end_times.append(laptime)
+                    end_Es.append(energy)
+                    caps.append(power_cap)
+                    Ms.append(masses[i])
+                    Cls.append(aero_package[0])
+                    Cds.append(aero_package[1])
+                    capacities.append(capacity)
+
+                    # Save off the output df as an excel file
+                    output_df.to_excel(small_writer, sheet_name='{:} kW'.format(power_cap), index=False, header=transient_header)
+            small_writer.close()
+
 
                 
     
@@ -310,7 +325,7 @@ def aero_sweep():
 
     df0 = np.concatenate((m, Capacities, cap, clift, cdrag, t1, e1), axis=1)
     df1 = pd.DataFrame(df0)
-    writer = pd.ExcelWriter('mass_power_sweep.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter('mass_power_sweep6.xlsx', engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
@@ -408,7 +423,7 @@ def optimize_endurance(endurance_trackfile, possible_packs, power_caps, numLaps,
             vehicle.soft_reload(masses[i], power_caps[j1]) # reload our vehicle to have the new data
 
             # simulate endurance
-            laptime, energy, pack_failure = open_loop.simulate_endurance(pack, numLaps)
+            laptime, energy, pack_failure, _ = open_loop.simulate_endurance(pack, numLaps)
 
             # if we cannot complete endurance with this power cap, drop the cap
             if pack_failure:
@@ -650,7 +665,7 @@ def get_points():
     
 
 
-    endurance_time, endurance_energy, _ = open_loop.simulate_endurance(pack, numEnduranceLaps)
+    endurance_time, endurance_energy, _, _ = open_loop.simulate_endurance(pack, numEnduranceLaps)
 
     print(f"Endurance completed in {round(endurance_time, 2)} seconds using {round(endurance_energy, 2)} kWh.")
 
@@ -671,7 +686,7 @@ def get_points():
     
 
 #print(get_points())
-#aero_sweep()
+aero_sweep()
 
 '''
 

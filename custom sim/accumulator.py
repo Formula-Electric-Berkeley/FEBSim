@@ -20,6 +20,7 @@ class Cell_21700:
     def __init__(self):
 
         self.cell_data = {
+            # If using Energus, copy from their datasheet
             "name": "21700", 
             "weight": 70,
             "length": 70.15,
@@ -27,7 +28,7 @@ class Cell_21700:
             "nom_v": 3.6,
             "max_v": 4.2,
             "DCIR": 0.016,
-            "capacity": 10.8 #15.5 for SN4 cells, 10.8 for SN3
+            "capacity": 15.5 #15.5 for SN4 cells, 10.8 for SN3
             }
         '''
         **BASE UNITS
@@ -89,7 +90,7 @@ class Pack(Cell_21700):
 
         # what is the total charge *removed* from the accumulator? in Wh       
         self.cell_data["discharge"] = 0
-        self.discharge_polynomials = discharge_curves_energus.return_polynomials()
+        self.discharge_polynomials = discharge_curves_molicell.return_polynomials()
 
         self.drain_error = False # have we over-drained this pack?
         self.breaker_popped = False # did we exceed our current max?
@@ -149,9 +150,9 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
     # if we know our initial voltage, next-step capacity, and current, this tells us the next voltage
     # then, we keep draining the capacity further at a different current, and we drop voltages again
     def get_cell_voltage(self, capacity, target_current):
-        # currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps; use this for Molicell
+        currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps; use this for Molicell
 
-        currents = [0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0]
+        # currents = [0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0] # Use these for Energus
         known_voltages = []
 
         for p in self.discharge_polynomials:
@@ -202,8 +203,8 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
 
     # gets dV/dQ at our desired capacity and current
     def get_derivative(self, capacity, target_current):
-        # currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps; use this for Molicell
-        currents = [0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0]   # Use this for Energus (SN3)
+        currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps; use this for Molicell
+        # currents = [0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0]   # Use this for Energus (SN3)
 
 
         # calculate the numerical derivative of V with respect to Capacity for each curve
@@ -330,9 +331,9 @@ def run_stats(series, parallel, segment):
 import matplotlib.pyplot as plt
 import numpy as np
 def test_pack(series, parallel, segment):
-    # currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps
+    currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps; use for Molicell
 
-    currents = [0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0]
+    # currents = [0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0] # use for energus
 
 
     pack = Pack()
@@ -385,7 +386,16 @@ def test_pack(series, parallel, segment):
     
 
 # 14, 4, 10
-#test_pack(14, 4, 10)
+# 112s4p
+# 112s5p
+# 128s4p
+# 128s5p
+
+# Packs for Rick: [14, 4, 8], [14, 5, 8], [16, 4, 8], [16, 5, 8]
+
+
+
+#test_pack(14, 4, 8)
 
 
 

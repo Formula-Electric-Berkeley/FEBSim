@@ -85,7 +85,7 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
     # Current lateral acceleration
     ay = v**2 * r + g * np.sin(np.radians(bank))
     
-    # Tyre forces
+    # Tyre force prefactors
     dmy = factor_grip * veh.sens_y
     muy = factor_grip * veh.mu_y
     Ny = veh.mu_y_M * g
@@ -120,13 +120,10 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
         bps = max([fx_tyre, 0]) * veh.beta #again possible check
         tps = 0
         ax_com = -min([-ax_tyre, -ax_track_limit])
-        #Check where the command is when the issue occurs
     
     # Final results
     ax = ax_com + ax_drag
-    #print(v**2 + 2*mode*ax*dx)
     v_next = np.sqrt(v**2 + 2 * mode * ax * dx)
-    #print(v_next)
     
     if tps > 0 and v / v_next >= 0.999:
         tps = 1
@@ -220,7 +217,7 @@ def vehicle_model_lat(veh, tr, p):
         else:
             raise ValueError(f"Discriminant < 0 at point index: {p}")
         
-        # No drag????
+        # No drag
         v = min([v, veh.v_max])
         
         # Adjusting speed for drag force compensation

@@ -3,6 +3,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
+import casadi as ca
 
 import matplotlib.pyplot as plt
 
@@ -33,8 +34,9 @@ class motor():
         power_capped = np.min((self.peak_power, power_cap * self.inverter_efficiency * self.motor_efficiency), axis=0)
         torque_capped = np.divide(power_capped, self.motor_speed)*1000/(2*np.pi/60)
 
-        
-        return self.motor_speed, torque_capped
+        motor_speeds = np.asarray(self.motor_speed)
+        capped_torques = np.asarray(torque_capped)
+        return motor_speeds, capped_torques
     
     def plot_motor_curve(self, power_cap):
         speed, torque = self.get_motor_curve(power_cap)
@@ -186,6 +188,20 @@ class motor():
 def test_motor():
     motor().plot_motor_curve(30)
 
+    motor_speeds, motor_torques = motor().get_motor_curve(power_cap=30)
+    print(motor_torques)
+
+    '''test_motor_speed = 1500  # Motor speed within the range
+    torque_interp = ca.interpolant('torque_interpolated', 'linear', [motor_speeds], motor_torques)
+    test_torque = torque_interp(test_motor_speed)
+    print(f"Interpolated torque at {test_motor_speed} rpm: {test_torque}")
+
+    plt.scatter(motor_speeds, motor_torques, color='red', label="Data Points")
+    plt.xlabel('Motor Speed (rpm)')
+    plt.ylabel('Torque')
+    plt.legend()
+    plt.show()'''
+
     
 #test_motor()
     
@@ -200,15 +216,83 @@ class drexler_differential():
 
         self.forward_lock_up_percent = 0.51
         self.reverse_lock_up_percent = 0.29
+        self.preload = 10                   # in Nm, the initial resistance to the diff opening up (without any applied torque)
+        self.state = 'Open'                 # begin with the diff open
+        self.direction = 'Accelerating'     # start in acceleration
 
     # Return the torque supplied by the differential for a given applied torque
     # Make this functionally dependent on wheel speed later
-    def get_torque(self, applied_torque):
+    # For now, we will be fully locked below the differential torque and fully open above
+    # In reality, there's a fricitonal force that comes from applied torque and depends 2nd order on the difference in wheel speed
+    def get_differential_torque(self, applied_torque):
         
-        if applied_torque > 0:
+        if self.direction == 'Accelerating':
             # Accelerating 
-            self.forward_lock_up_percent*applied_torque
-        
+            differential_torque = self.forward_lock_up_percent*applied_torque
         else:
             # Braking
-            self.reverse_lock_up_percent*np.abs(applied_torque)
+            differential_torque = self.reverse_lock_up_percent*np.abs(applied_torque)
+
+        return min(differential_torque, self.preload)
+    
+    # Updates whether the rear axle is accelerating or decelerating
+    def update_direction(self, left_wheel_acceleration):
+        if left_wheel_acceleration > 0:
+            self.direction = 'Accelerating'
+        else:
+            self.direction = 'Decelerating'
+
+
+    # The differential controls how the applied torque is distributed between the driven wheels
+    # In our model, this is entirely based on (a) the applied torque, and (b) the difference in wheel response torques
+    # Since brake force is applied equally, the "wheel response torque" is just the torque due to tire forces
+    def differentiate(self, left_wheel_response_torque, right_wheel_response_torque, applied_torque):
+        
+        response_delta = left_wheel_response_torque - right_wheel_response_torque 
+        differential_torque = self.get_differential_torque(applied_torque)
+
+        # Before differentiation occurs, the applied torque is supplied equally to both wheels
+        left_applied_torque = applied_torque*0.5
+        right_applied_torque = applied_torque*0.5
+        
+        if differential_torque <= self.preload:
+            # If the applied torque is sufficiently small, we're essentially an open differential
+            self.state = 'Open'
+
+        elif response_delta > differential_torque:
+            # The difference in grip torques exceeds what the diff can provide, we become partially locked
+            self.state = 'Partially Locked'
+
+            # if the left wheel has more grip, apply more torque to the left wheel and less torque to the right wheel
+            # otherwise, apply more torque to the right wheel
+            left_applied_torque     +=  0.5*differential_torque*np.sign(response_delta)
+            right_applied_torque    -= 0.5*differential_torque*np.sign(response_delta)
+
+        else:
+            # If the differential torque = or exceeds the response delta, we can fully negate it
+            # To do this, apply an additional 0.5 * abs(response_delta) to the wheel with more grip
+            # Apply - 0.5* abs(response_delta) to the wheel with less grip. This gives the wheels the same net torque 
+
+            left_applied_torque     +=  0.5*response_delta
+            right_applied_torque    -= 0.5*response_delta
+
+
+
+        # The differential changes the driven torque at the wheels and does not directly change the grip
+        return left_applied_torque, right_applied_torque
+    
+
+    '''
+    Differential implementation
+    - If open, the wheel speeds are independent, and both are given an equal amount of torque (1/2 applied)
+    - If partially locked, the differential applies more torque to the wheel with more traction (more response torque)  
+    - If fully locked, the driven wheel speeds are equal; the net torques must also be equal in steady state
+        
+    Generally, the goal of the differential is to decrease the torque applied to the faster spinning wheel (i.e. the wheel with less grip = response torque)
+
+    Can- The angular speeds of the wheels average out to the angular speed at the input of the diff
+    To determine the motor speed, we literally only need the wheel speeds; that's awesome for implementing the motor efficiency curve
+
+    If we're accelerating, the frictional force at the wheels points forward
+    If we're decelerating, the frictional force at the wheels points backward
+    '''

@@ -27,14 +27,13 @@ def simulate(pack):
     bps_v_max = np.zeros(tr.n, dtype=np.float32)
     tps_v_max = np.zeros(tr.n, dtype=np.float32)
     
+
+    # Find the maximum steady-state velocity at each mesh node
     for i in range(tr.n):
         v_max[i], tps_v_max[i], bps_v_max[i] = lap_utils.vehicle_model_lat(veh, tr, i)
-    
-    # HUD
-    #print('Maximum speed calculated at all points.')
-    
+
     # Finding apexes
-    apex, _ = find_peaks(-v_max)  # Assuming findpeaks is a function that finds peaks in an array
+    apex, _ = find_peaks(-v_max) 
     
     v_apex = v_max[apex]  # Flipping to get positive values
     
@@ -85,53 +84,63 @@ def simulate(pack):
         k_rest = 1 if k == 0 else 0
     
         for i in range(N):  # Apex number
+            
+            # Accelerate and decelerate from apex i to every other apex (j), unless... (see *) 
+
             if not (tr.info.config == 'Open' and mode == -1 and i == 0):  # Does not run in decel mode at standing start in open track
+                
                 # Getting other apex for later checking
                 i_rest = lap_utils.other_points(i, N)
+                
                 # Getting apex index
                 j = int(apex[i])
-                #print("Here j = {}".format(j))
+
                 # Saving speed, latacc, and driver inputs from presolved apex
                 v[j, i, k] = v_apex[i]
-                
-                
                 ay[j, i, k] = v_apex[i] ** 2 * tr.r[j]
                 tps[j, :, 0] = np.full(N, tps_apex[i])
                 tps[j, :, 1] = np.full(N, tps_apex[i])
-                
-
                 bps[j, :, 0] = np.full(N, bps_apex[i])
                 bps[j, :, 1] = np.full(N, bps_apex[i])
-                # Setting apex flag
+
+                # Setting apex flag to show we've solved for this j node in the k direction
                 flag[j, k] = True
-                # Getting next point index
+
+                # Getting next point index (identify which j node will we solve for next)
                 _, j_next = lap_utils.next_point(j, tr.n-1, mode)
     
-                if not (tr.info.config == 'Open' and mode == 1 and i == 0):  # If not in standing start
-                    # Assuming the same speed right after apex
+
+                if not (tr.info.config == 'Open' and mode == 1 and i == 0):  # If we're not in standing start
+                    # Assuming the same speed right after apex; initial guess
                     v[j_next, i, k] = v[j, i, k]
+
                     # Moving to the next point index
                     j_next, j = lap_utils.next_point(j, tr.n-1, mode)
     
+                # Solve for the velocities at the rest of the j apexes 
                 while True:
                     # Calculating speed, accelerations, and driver inputs from the vehicle model
                     v[j_next, i, k], ax[j, i, k], ay[j, i, k], tps[j, i, k], bps[j, i, k], overshoot = lap_utils.vehicle_model_comb(veh, tr, v[j, i, k], v_max[j_next], j, mode)
-                    #print("j = {} | | v = {}".format(j, v[j_next, i, k]))
+
                     # Checking for limit
                     if overshoot:
                         #print("Overshot at ", j_next)
                         break
+
                     # Checking if the point is already solved in the other apex iteration
                     if flag[j, k] or flag[j, k_rest]:
+                        # (*) if we've already solved for this j apex when starting from a different i, and if we found that velocity to be lower, 
+                        # we know the rest of the velocities using our current i will not give a minimum velocity segment, so we go to a different i
                         if np.max(v[j_next, i, k] >= v[j_next, i_rest, k]) or np.max(v[j_next, i, k] > v[j_next, i_rest, k_rest]):
                             skipped += 1
                             break
-                    # Updating flag and progress bar
-                    flag[j, k] = True #flag_update(flag, j, k, prg_size, logid, prg_pos)
-                    # Moving to the next point index
+                    
+                    # Updating flag and Moving to the next point index
+                    flag[j, k] = True 
                     j_next, j = lap_utils.next_point(j, tr.n-1, mode )
-                    # Checking if the lap is completed
+                    
 
+                    # Checking if the lap is completed
                     if tr.info.config == 'Closed':
                         if j == apex[i]:  # Made it to the same apex
                             counter += 1
@@ -203,14 +212,15 @@ def simulate(pack):
     # laptime calculation    
     dt = np.divide(tr.dx, V)
     time = np.cumsum(dt)
+    laptime = time[-1]
+    
+
     
     #max_sector = int(np.max(tr.sector))
     #sector_time = np.zeros(max_sector)
     
     #for i in range(1, max_sector + 1):
         #sector_time[i - 1] = np.max(time[tr.sector == i]) - np.min(time[tr.sector == i])
-    
-    laptime = time[-1]
     
     #print("Laptime is {}".format(laptime))
     
@@ -230,7 +240,6 @@ def simulate(pack):
 
     # Interpolate wheel torque
     torque_func = interp1d(veh.vehicle_speed, veh.wheel_torque, kind='linear', fill_value='extrapolate')
-
     wheel_torque = TPS * torque_func(V)
     motor_torque = wheel_torque / (veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final*veh.n_primary*veh.n_gearbox*veh.n_final)
 
@@ -247,6 +256,8 @@ def simulate(pack):
     overall_regen_efficiency = 0.9                      # assumes xx% of energy from braking is regenerated by the motor
     regen_power_limit = 5                               # maximum rate of regen in kW
     regen_power_limit = regen_power_limit * 1000        # in Watts
+    
+    
     #TODO: model this better with more EECS data later
 
     peaks, __ = find_peaks(V)
@@ -321,7 +332,7 @@ def simulate(pack):
     motor_work = np.trapz(wheel_torque / veh.tyre_radius, x = tr.x)
 
 
-    # Power of the motor numerically integrated over time in kWh; gives values about 1 kWh larger
+    # Power of the motor numerically integrated over time
     motor_energy = np.sum(np.multiply(motor_power, dt))
 
     energy_cost_total = motor_work/(3.6*10**6)                   # in kWh
@@ -372,7 +383,7 @@ def simulate(pack):
 
         cell_data = pack.get_cell_data()
 
-        # cconvert our target current to a target motor power; command a little less so that we converge
+        # convert our target current to a target motor power; command a little less so that we converge
         target_power = target_current * cell_data["voltage"]*0.99 
         
 
@@ -503,7 +514,7 @@ def simulate_endurance(pack, numLaps):
     pack_failed = pack_failure[-1]
 
 
-    return total_time, total_energy_drain, pack_failed
+    return total_time, total_energy_drain, pack_failed, output_df
 
 
 

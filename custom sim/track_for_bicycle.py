@@ -19,15 +19,11 @@ log_mode = 'speed & latacc'
 mode = 'shape data'
 
 # meshing
-mesh_size = 1.25 # [m]
+mesh_size = 4.25 # [m]
 
 
 # Track excel file selection
-base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\track_files\\"
-
-filename = 'Michigan 2014.xlsx'
-
-filename = base_name + filename
+filename = 'tracks/test_track.xlsx'
 info = read_info(filename,'Shape')
 
 
@@ -135,7 +131,7 @@ def reload(trackfile):
     
     
     # Track excel file selection
-    base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\track_files\\"
+    base_name = 'tracks/'
     filename = base_name + trackfile
     info = read_info(filename,'Shape')
 
