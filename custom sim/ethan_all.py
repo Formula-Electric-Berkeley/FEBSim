@@ -228,10 +228,10 @@ def aero_sweep():
     numLaps = 22
 
     # loop over various motor_curves
-    power_caps = [50, 40, 30, 20]
+    power_caps = [60, 40]
 
     # Cl, Cd
-    aero_coefficients = [#[-1.98, -1.33],            # High downforce config; negative = downforce, + is lift
+    aero_coefficients = [[-1.98, -1.33],            # High downforce config; negative = downforce, + is lift
                         [-1.23, -0.93]]#,           # Low drag config; must be negative!
                         #[-0.05, -0.52]]           # No aero package
 
@@ -242,15 +242,18 @@ def aero_sweep():
     # driver weight:        80
 
 
-    pack_dimension = [[14, 4, 8],
-                      [14, 5, 8],
-                      [16, 4, 8],
-                      [16, 5, 8]]
+    pack_dimension = [#[14, 4, 8],
+                     # [14, 5, 8],
+                     # [16, 4, 8],
+                      [16, 5, 8],
+                      [12, 5, 8]]
 
-    
+    safe_voltages = [400, 250]
+    derating_bounds = [460, 290]
+
     capacities = []
 
-    driver_masses = [-45, -30, -15, 0, 15, 30, 45, 60, 75]
+    driver_masses = [35]
     #base_mass = 231.0 + driver_mass
     with_aero = 245.0          # for high downforce config
 
@@ -261,6 +264,7 @@ def aero_sweep():
     
 
     # output vectors of the sim for easier output in excel 
+    names = []
     end_times = []
     end_Es = []
     caps = []
@@ -271,15 +275,16 @@ def aero_sweep():
     #start endurance
     track.reload('Michigan_2021_Endurance.xlsx')
 
-    for pack_dim in pack_dimension:
+    for k, pack_dim in enumerate(pack_dimension):
         # initialize our pack
         series, parallel, segment = pack_dim
         pack = accumulator.Pack()
         pack.pack(series, parallel, segment)
+        pack.set_derating(safe_voltages[k], derating_bounds[k])
 
         # get the cell mass, name, and capacity for output
         cell_data = pack.get_cell_data()
-        capacity = cell_data["capacity"]/1000       # in kWh
+        capacity = cell_data["capacity"]/1000       # in 
 
         for i, mass in enumerate(masses):
             small_writer = pd.ExcelWriter('transient_data_{:}_{:}.xlsx'.format(cell_data["name"], mass), engine='xlsxwriter')
@@ -300,6 +305,7 @@ def aero_sweep():
                     end_Es.append(energy)
                     caps.append(power_cap)
                     Ms.append(masses[i])
+                    names.append(cell_data["name"])
                     Cls.append(aero_package[0])
                     Cds.append(aero_package[1])
                     capacities.append(capacity)
@@ -309,11 +315,11 @@ def aero_sweep():
             small_writer.close()
 
 
-                
     
     # Output everything using Pandas
-    header = ['Mass (kg)', 'Capacity (kWh)', 'Power Cap (kW)', 'Cls', 'Cds', 'Endurance Laptime (s)', 'Endurance Energy (kWh)']
+    header = ['Pack Config', 'Mass (kg)', 'Capacity (kWh)', 'Power Cap (kW)', 'Cls', 'Cds', 'Endurance Laptime (s)', 'Endurance Energy (kWh)']
 
+    names = np.vstack(names)
     m = np.vstack(Ms)
     Capacities = np.vstack(capacities)
     cap = np.vstack(caps)
@@ -323,9 +329,9 @@ def aero_sweep():
     e1 = np.vstack(end_Es)
   
 
-    df0 = np.concatenate((m, Capacities, cap, clift, cdrag, t1, e1), axis=1)
+    df0 = np.concatenate((names, m, Capacities, cap, clift, cdrag, t1, e1), axis=1)
     df1 = pd.DataFrame(df0)
-    writer = pd.ExcelWriter('mass_power_sweep6.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter('mass_power_sweep.xlsx', engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()

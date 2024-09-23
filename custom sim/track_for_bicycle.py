@@ -19,7 +19,7 @@ log_mode = 'speed & latacc'
 mode = 'shape data'
 
 # meshing
-mesh_size = 4.25 # [m]
+mesh_size = 5.25 # [m]
 
 
 # Track excel file selection
