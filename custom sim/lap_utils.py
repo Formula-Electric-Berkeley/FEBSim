@@ -141,7 +141,88 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
     
     return v_next, ax, ay, tps, bps, overshoot        
         
+# Adjusts torque to keep accumulator safe
+def adjust_torque(veh, tr, TPS_MAX, j, v, v_max_next):
+    # v = current velocity
+    # j is index of current mesh point
+    # v_max_next is next velocity
+    # this should only be run if TPS at the given mesh point is > 0
 
+    # Getting track data
+    dx = tr.dx[j]
+    r = tr.r[j]
+    incl = tr.incl[j]
+    bank = tr.bank[j]
+    factor_grip = tr.factor_grip[j] * veh.factor_grip
+    g = 9.81
+    
+    factor_drive = veh.factor_drive
+    factor_aero = veh.factor_aero
+    driven_wheels = veh.driven_wheels
+    
+    # External forces
+    M = veh.M
+    Wz = M * g * np.cos(np.radians(bank)) * np.cos(np.radians(incl))
+    Wy = -M * g * np.sin(np.radians(bank))
+    Wx = M * g * np.sin(np.radians(incl))
+    Aero_Df = 0.5 * veh.rho * veh.factor_Cl * veh.Cl * veh.A * v**2
+    Aero_Dr = 0.5 * veh.rho * veh.factor_Cd * veh.Cd * veh.A * v**2
+    Roll_Dr = veh.Cr * (-Aero_Df + Wz)
+    Wd = (factor_drive * Wz + (-factor_aero * Aero_Df)) / driven_wheels
+    
+    # Overshoot acceleration
+    ax_max = (v_max_next**2 - v**2) / (2 * dx)
+    ax_drag = (Aero_Dr + Roll_Dr + Wx) / M
+    ax_track_limit = ax_max - ax_drag # same as ax_needed in OpenLap
+    
+    # Current lateral acceleration
+    ay = v**2 * r + g * np.sin(np.radians(bank))
+    
+    # Tyre force prefactors
+    dmy = factor_grip * veh.sens_y
+    muy = factor_grip * veh.mu_y
+    Ny = veh.mu_y_M * g
+    dmx = factor_grip * veh.sens_x
+    mux = factor_grip * veh.mu_x
+    Nx = veh.mu_x_M * g
+    
+    if np.sign(ay) != 0:
+        ay_max = (1 / M) * (np.sign(ay) * (muy + dmy * (Ny - (Wz - Aero_Df) / 4)) * (Wz - Aero_Df) + Wy)
+        if np.abs(ay / ay_max) > 1:
+            #print("THIS SHOULD NOT HAPPEN")
+            ellipse_multi = 0 #just a check to be safe
+        else:
+            ellipse_multi = np.sqrt(1 - (ay / ay_max)**2)
+    else:
+        ellipse_multi = 1
+    
+    # Calculating driver inputs
+    if ax_track_limit >= 0:
+        ax_tyre_max = (1 / M) * (mux + dmx * (Nx - Wd)) * Wd * driven_wheels
+        ax_tyre = ax_tyre_max * ellipse_multi
+        engine_force_func = interp1d(veh.vehicle_speed, veh.factor_power * veh.fx_engine)
+        ax_power_limit = (1 / M) * engine_force_func(v)
+        scale = min([ax_tyre, ax_track_limit]) / ax_power_limit
+        tps = max([min([TPS_MAX, scale]), 0]) #possible check
+        bps = 0
+        ax_com = tps * ax_power_limit
+    else:
+        ax_tyre_max = -(1 / M) * (mux + dmx * (Nx - (Wz - Aero_Df) / 4)) * (Wz - Aero_Df)
+        ax_tyre = ax_tyre_max * ellipse_multi
+        fx_tyre = min([-ax_tyre, -ax_track_limit]) * M
+        bps = max([fx_tyre, 0]) * veh.beta #again possible check
+        tps = 0
+        ax_com = -min([-ax_tyre, -ax_track_limit])
+    
+    # Final results
+    ax = ax_com + ax_drag
+    v_next = np.sqrt(v**2 + 2 * ax * dx)
+    
+    # All subsequent velocities must be capped at v_next until the next point of throttle
+    return v_next, tps, bps
+    
+
+        
 
 def vehicle_model_lat(veh, tr, p):
     # Initialisation

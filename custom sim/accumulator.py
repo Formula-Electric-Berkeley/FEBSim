@@ -86,7 +86,7 @@ class Pack(Cell_21700):
         self.cell_data["voltage"] = self.cell_data["max_v"]  
 
         # what is the minimum safe voltage?
-        self.cell_data["min_v"] = 400.0
+        #self.cell_data["min_v"] = 400.0
 
         # what is the total charge *removed* from the accumulator? in Wh       
         self.cell_data["discharge"] = 0
@@ -94,6 +94,9 @@ class Pack(Cell_21700):
 
         self.drain_error = False # have we over-drained this pack?
         self.breaker_popped = False # did we exceed our current max?
+
+        self.derating_bound = 460
+        self.safe_voltage = 400
         
         #Print Results (with formatting)
         '''
@@ -142,6 +145,7 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
             print("**No warnings**")
         '''
         
+        print("Creating a new pack of voltage {} V and capacity {} kWh".format(self.cell_data["voltage"], 0.001*self.cell_data["capacity"]))
         return self
     
 
@@ -219,9 +223,17 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
         derivative_interpolator = interp1d(currents, known_derivatives, kind='cubic', fill_value='extrapolate')
 
         return derivative_interpolator(target_current)
+    
+
+    #TODO throw current cap here also; add a "peak" and continuous current cap
+    def set_derating(self, safe_minimum, derating_bound):
+        self.safe_voltage = safe_minimum
+        self.derating_bound = derating_bound
+
 
     # predicts the next-step V(t) given some stimulus P(t) -- effectively numerically integrates V(Q-) for a given dQ-
-    def new_drain(self, power, time_step):
+    # this will not drain anything if we pop our breaker; instead it will return the maximum current needed to stay safe
+    def try_drain(self, power, time_step):
         # use P = IV to get the current through each cell
         total_current = power / self.cell_data["voltage"] #total current through the accumulator
         #print(total_current)
@@ -232,16 +244,13 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
         current_cap = 60 #Amps
 
 
-        #TODO; fix derating so that we don't auto-fail the lap but rather cap  
-
-        # Brownout protection: below 460 Volts, current cap
-        derating_bound = 460 #V
-        min_voltage = 400
+        # Brownout protection: below 460 Volts, current cap -> TODO this was a hotfix for SN3
+        # MAJOR TODO ----write a method to plot our curves and  
         slope_for_derating = 5*current_cap/6
 
-        if self.cell_data["voltage"] < derating_bound:
-            i1 = np.min([current_cap, np.max([10.0, current_cap*(slope_for_derating*(self.cell_data["voltage"]-derating_bound)+1)])])
-            i2 = i1*min_voltage/self.cell_data["voltage"]
+        if self.cell_data["voltage"] < self.derating_bound:
+            i1 = np.min([current_cap, np.max([10.0, current_cap*(slope_for_derating*(self.cell_data["voltage"]-self.derating_bound)+1)])])
+            i2 = i1*self.safe_voltage/self.cell_data["voltage"]
 
             # print("Derating the current to {} A at {} V".format(i2, self.cell_data["voltage"]))
             
@@ -354,7 +363,7 @@ def test_pack(series, parallel, segment):
     cell_data = pack.get_cell_data()
     print("Capacity: ", cell_data["capacity"])
     for i in range(10):
-        pack.new_drain(lap_power, dt)
+        pack.try_drain(lap_power, dt)
 
         cell_data = pack.get_cell_data()
         # check updated accumulator peak voltage

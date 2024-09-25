@@ -16,12 +16,8 @@ import powertrain_model
 motor = powertrain_model.motor()
 
 
-
-def simulate(pack):
-    #Import track and vehicle files like OpenLap
-    import track as tr
-    import vehicle as veh
-
+# v_max is the electronically imposed maximum velocity; set to 999 by default
+def simulate_mainloop(veh, tr):
     # Maximum speed curve
     v_max = np.zeros(tr.n, dtype=np.float32)
     bps_v_max = np.zeros(tr.n, dtype=np.float32)
@@ -65,7 +61,7 @@ def simulate(pack):
     # Getting driver inputs at apexes
     tps_apex = tps_v_max[apex]
     bps_apex = bps_v_max[apex]
-    
+
     # Memory preallocation
     N = len(apex)  # Number of apexes
     flag = np.zeros((tr.n, 2), dtype=bool)  # Flag for checking that speed has been correctly evaluated
@@ -153,8 +149,6 @@ def simulate(pack):
                             break
 
 
-
-    #print(v[:, 20, 0])
     # preallocation for results
     V = np.zeros(tr.n)
     AX = np.zeros(tr.n)
@@ -180,33 +174,16 @@ def simulate(pack):
             TPS[i] = tps[i, idx-IDX, 1]
             BPS[i] = bps[i, idx-IDX, 1]
 
-    #print(flag)
-    #Below is a useful check to see where the apexes are:
-    '''
-    x = []
-    xapex = []
-    
-    for i in range(len(v_max)):
-        x.append(i)
-        
-        if i in apex:
-            xapex.append(i)
+    return V, AX, AY, TPS, BPS
 
-    ax = plt.axes()
-    #ax.plot(x, v_max, label="Max")
-    #ax.plot(x, tr.r*50, label="1/Radius (arb.)")
-    ax.scatter(xapex, old_apexes)
-    ax.set_ylabel("Velocity (m/s)")
-    ax.set_xlabel("Longitudinal Coordinate x (m)")
-    ax.set_title("Velocity Trace")
-    
-    
-    #print(V)
+# The old simulate is now simulate_mainloop; this method holds the additional clutter and modifications; 9/22
+def simulate(pack):
+    #Import track and vehicle files like OpenLap
+    import track as tr
+    import vehicle as veh
 
-    ax.plot(x, V, color='r', label="Final")
-    ax.legend()
-    plt.show()
-    '''
+    # Run our laputils functions to get first-pass solutions to the track
+    V, AX, AY, TPS, BPS = simulate_mainloop(veh, tr)
 
     
     # laptime calculation    
@@ -214,22 +191,10 @@ def simulate(pack):
     time = np.cumsum(dt)
     laptime = time[-1]
     
-
-    
-    #max_sector = int(np.max(tr.sector))
-    #sector_time = np.zeros(max_sector)
-    
-    #for i in range(1, max_sector + 1):
-        #sector_time[i - 1] = np.max(time[tr.sector == i]) - np.min(time[tr.sector == i])
-    
-    #print("Laptime is {}".format(laptime))
-    
-    
-    
+    # TODO this seems dubious
     # Remove the final infinite value from V
     if (V[-1] == np.inf):
         V[-1] = V[-2]
-
 
 
     # TODO: 7/29/24; problem with 0 TPS, infinite V on endurance track showed up -- even in old versions, on new computer; this is a hotfix
@@ -238,18 +203,12 @@ def simulate(pack):
     V[np.isinf(V)] = minV
     
 
+    '''Determination of forces for energy calculations'''
+
     # Interpolate wheel torque
     torque_func = interp1d(veh.vehicle_speed, veh.wheel_torque, kind='linear', fill_value='extrapolate')
     wheel_torque = TPS * torque_func(V)
     motor_torque = wheel_torque / (veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final*veh.n_primary*veh.n_gearbox*veh.n_final)
-
-    # TODO; debugging for outstanding error
-    '''
-    print(V[3444:3463])
-    print(TPS[3444:3463])
-    print(torque_func(V)[3444:3463])
-    print(np.where(np.isnan(wheel_torque)))
-    '''
 
     #Power regen
     brake_force = BPS/veh.beta                          # F_brake = BPS/veh.beta
@@ -287,46 +246,9 @@ def simulate(pack):
     motor_power = motor_torque * motor_speed #in W
 
 
-    
-
-    '''
-    Skidpad stuff
-    
-    
-    L_skidpad = 2*np.pi*15.25       # total arc length of two laps of 15.25 m diameter skidpad
-
-    L = L_skidpad + 1       # add the length of the initial straight
-
-    N_skid_points = L / tr.mesh_size
-
-    skid_dts = dt[:N_skid_points]
-    skid_time = np.cumsum(skid_dts)
-    
-    # The total laptime for the skidpad
-    skid_laptime = skid_time[-1]
-
-    '''
-
-
     # Replace motor_power and wheel_torque curves with zeros where values are negative
     motor_power = np.where(motor_power < 0, 0, motor_power)
     wheel_torque = np.where(wheel_torque < 0, 0, wheel_torque)
-
-
-    '''
-    #TODO skidpad stuff
-
-    skid_torques = wheel_torque[:N_skid_points]
-    skid_work = np.trapz(skid_torques / veh.tyre_radius, x = tr.x[:N_skid_points])
-
-    skid_energy_cost = skid_work/(3.6*10**6)                   # in kWh
-
-    skidpad = True
-    if skidpad:
-        return skid_laptime, skid_energy_cost
-
-    '''
-
 
     # Work from the motor is force from the motor * dx integrated over the track
     motor_work = np.trapz(wheel_torque / veh.tyre_radius, x = tr.x)
@@ -348,26 +270,14 @@ def simulate(pack):
 
     #scaled_motor_power = skidpad_scale_factor * motor_power
 
-    motor_energy = np.sum(np.multiply(motor_power, dt))
-
-
-    energy_cost_total = motor_energy/(3.6*10**6)                   # in kWh
-
-
-    # so that we include the scaling upstream in our accumulator sims
-    motor_power = motor_power
-
-
-    
-    # we don't want it for open_all, but it would be nice to have the scaled-up energy calcs
-    #print("Energy cost is {:.3f} kWh".format(energy_scale*energy_cost_total*numLaps)) 
-    #print("Regenerated {:.3f} kWh".format(energy_scale*energy_gained_total*numLaps)) 
-    #print()
 
     energy_drain = energy_cost_total
     
+
+
+    '''Modify our results to conform to electrical restrictions'''
+
     # Quasi-transient accumulator calculations
-    
     # leave the option to not simulate with the pack
     pack_voltages = []
     pack_discharges = []
@@ -376,48 +286,46 @@ def simulate(pack):
     mot_powers = []
     current_draws = []
 
-    for i, power in enumerate(motor_power):
+    
+    for i in range(len(motor_power)-1):
+        power = motor_power[i]
 
         # drain the accumulator by the energy consumed during each time-step, and get our target current
-        target_current, breaker_popped = pack.new_drain(power, dt[i])
+        # Crucial point: if the breaker pops, we do not "drain" anything; we wait until we adjust the power and try again
+        target_current, breaker_popped = pack.try_drain(power, dt[i])       
+        # Motor power is instantaneous, so we can extract a current 
+        # TODO: motor power * inverter_efficiency (97% or experimental / from library) = DC power
+        # DC power = I * V -> gets I for pack
+        # To get current going through the motor, we need to do more inverter magic 
 
         cell_data = pack.get_cell_data()
 
-        # convert our target current to a target motor power; command a little less so that we converge
-        target_power = target_current * cell_data["voltage"]*0.99 
-        
-
         # if we ever exceed our software-maxed current, decrease our power to target_power
-        error = target_power - power        # if error is negative (this should always should be the case), we need to *decrease* our power and thus our speed
+        P = 0.05 # how quickly should we decrement TPS? TPS is zero to 1; reduce by 5% each time
 
-        P = 1*10**-4 # convert from error (likely 1000s of Watts) to the velocity correction (likely 1s of m/s)
-
+        # While we're not commanding the proper motor power...
         while breaker_popped:
-            # Change the velocity at this point to decrease our commanded power 
-            V[i] = V[i] + error*P 
 
-            # Calculate wheel torque and speed corresponding to this new velocity
+            # Reduce the torque for this segment to decrease our commanded power ; note this impacts lap time as well
+            if TPS[i] > 0.0: #sanity check to make sure we're actually driving the motor
+                tps_max = max(TPS[i] - P, 0) # if we run into 0 here, we have a problem
+                # A lower TPS means a slower next-pass velocity
+                V[i+1], TPS[i], BPS[i] = lap_utils.adjust_torque(veh, tr, tps_max, i, V[i], V[i+1])
+            else:
+                break
+                 
+            # Calculate motor power corresponding to this new torque command
             wheel_torque = TPS[i] * torque_func(V[i])        
             wheel_speed = V[i]/veh.tyre_radius 
 
-            # find the new error
+            # find the new commanded power and error
             new_power = wheel_torque*wheel_speed
-            error = target_power - new_power
-
-            #if error > np.abs(target_power - power): # if we get farther off
-                #print("{}    {}".format(new_power, power))
-                # it eventually converges due to the sign inclusion I put above
-            
 
             # attempt to actually drain the accumulator and refresh the breaker if need-be (this is our escape from the loop)
-            target_current, breaker_popped = pack.new_drain(new_power, dt[i])
-
+            target_current, breaker_popped = pack.try_drain(new_power, dt[i])
             motor_power[i] = new_power
 
-
-
         # Recalculate energy consumption based on our adjusted motor powers
-
         motor_energy = np.sum(np.multiply(motor_power, dt))
         energy_cost_total = motor_energy/(3.6*10**6)                   # in kWh
         energy_drain = energy_cost_total
@@ -440,7 +348,7 @@ def simulate(pack):
         
         V[i] = min(V[i], basespeed)
 
-
+    
 
     # re-calculate laptime with base speed limitation    
     dt = np.divide(tr.dx, V)

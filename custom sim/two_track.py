@@ -6,7 +6,7 @@ import numpy as np
 import casadi as ca
 import pandas as pd
 
-import track as tr
+import track_for_bicycle as tr
 import vehicle as veh
 
 import powertrain_model
@@ -52,6 +52,13 @@ def combined_slip_forces(s, a, Fn):
 
     return Fx, Fy
 
+
+'''
+Ethan's changelog: 9/22
+The sim works without wheel speeds and it outputs reasonable data, from which you can reconstruct track geometry
+
+
+'''
 
 def opt_mintime():
     # ------------------------------------------------------------------------------------------------------------------
@@ -228,6 +235,11 @@ def opt_mintime():
     """
     In this section, we define the physical model equations that constrain our system
     The physical equations here ultimately define how our state variables evolve over time (and thus over the lap)
+
+
+
+    TODO: ensure the physics is correct -> use Ackermann geometry
+    Fix this week
     """
 
     # define physical constants
@@ -291,9 +303,7 @@ def opt_mintime():
     sigma_rl = (re * wrl - vlrl) / ca.fabs(vlrl)
 
     # compute wheel grip forces in the wheel frame
-    Flfr, Ftfr = combined_slip_forces(
-        sigma_fr, alpha_fr, F_Nfr
-    )  # Format: F_longitudinal_front_right
+    Flfr, Ftfr = combined_slip_forces(sigma_fr, alpha_fr, F_Nfr)  
     Flfl, Ftfl = combined_slip_forces(sigma_fl, alpha_fl, F_Nfl)
     Flrr, Ftrr = combined_slip_forces(sigma_rr, alpha_rr, F_Nrr)
     Flrl, Ftrl = combined_slip_forces(sigma_rl, alpha_rl, F_Nrl)
@@ -318,6 +328,9 @@ def opt_mintime():
         Fx_fr + Fx_fl + Fx_rl + Fx_rr + Fx_aero
     )  # net force in the x (longitudinal car direction)
     Fy = Fy_fr + Fy_fl + Fy_rr + Fy_rl  # net force in the y (lateral car direction)
+    
+    
+    # TODO: fix THIS ASAP
     Kz = (
         lf * (Fy_fr + Fy_fl)
         - lr * (Fy_rr + Fy_rl)
@@ -461,8 +474,8 @@ def opt_mintime():
     )  # max. relative angle to tangent of reference line [rad]
 
     # an average f1 track is 12m wide -1.5m for the car, -1m buffer on each side
-    n_min = -4 / n_s  # min lateral distance from reference line [m]
-    n_max = 4 / n_s
+    n_min = -2 / n_s  # min lateral distance from reference line [m]
+    n_max = 2 / n_s
 
     # for simplicitly, wheels cannot spin backwards, and we cannot have slip ratios > 1
     wheelspeed_min = 0.0
@@ -500,6 +513,7 @@ def opt_mintime():
         ["Fyfl", "Fyfr", "Fyrl", "Fyrr"],
     )
 
+
     # ------------------------------------------------------------------------------------------------------------------
     # FORMULATE NONLINEAR PROGRAM --------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
@@ -518,6 +532,7 @@ def opt_mintime():
     x_opt = []
     u_opt = []
     dt_opt = []
+    k_opt = []
     # ec_opt = []
 
     # initialize control vectors (for regularization)
@@ -602,6 +617,7 @@ def opt_mintime():
         # loop over all collocation points
         Xk_end = D[0] * Xk
         sf_opt = []
+        curv = []
         for j in range(1, d + 1):
             # calculate the state derivative at the collocation point
             xp = C[0, j] * Xk
@@ -625,6 +641,11 @@ def opt_mintime():
 
             # add contribution to scaling factor (for calculating lap time)
             sf_opt.append(B[j] * qj * mesh_point_separations[k])
+            curv.append(kappa_col)
+            #k_opt.append(kappa_col)
+            
+        # get middle curvature collocation point
+        k_opt.append(curv[1])
 
         # calculate time step
         dt_opt.append(sf_opt[0] + sf_opt[1] + sf_opt[2])
@@ -676,8 +697,6 @@ def opt_mintime():
         g.append(Xk_end - Xk)
         lbg.append([0.0] * nx)
         ubg.append([0.0] * nx)
-
-
 
 
 
@@ -831,6 +850,7 @@ def opt_mintime():
 
         """
 
+        # append outputs
         # After we constrain Xk and Uk, add them to our control vectors
         x_opt.append(Xk * x_s)
         u_opt.append(Uk * u_s)
@@ -883,6 +903,7 @@ def opt_mintime():
     x_opt = ca.vertcat(*x_opt)
     u_opt = ca.vertcat(*u_opt)
     dt_opt = ca.vertcat(*dt_opt)
+    k_opt = ca.vertcat(*k_opt)
     # ax_opt = ca.vertcat(*ax_opt)
     # ay_opt = ca.vertcat(*ay_opt)
     # ec_opt = ca.vertcat(*ec_opt)
@@ -922,17 +943,21 @@ def opt_mintime():
 
     # helper function to extract solution for state variables, control variables, and times
     f_sol = ca.Function(
-        "f_sol", [w], [x_opt, u_opt, dt_opt], ["w"], ["x_opt", "u_opt", "dt_opt"]
+        "f_sol", [w], [x_opt, u_opt, dt_opt, k_opt], ["w"], ["x_opt", "u_opt", "dt_opt", "k_opt"]
     )
 
     # extract solution
-    x_opt, u_opt, dt_opt = f_sol(sol["x"])
+    x_opt, u_opt, dt_opt, k_opt = f_sol(sol["x"])
 
     # solution for state variables
     x_opt = np.reshape(x_opt, (N + 1, nx))
 
     # solution for control variables
     u_opt = np.reshape(u_opt, (N, nu))
+
+    empty_row = np.full((1, u_opt.shape[1]), np.nan)  # Create an empty row filled with NaN
+    u_opt = np.vstack((u_opt, empty_row))  # Add the empty row
+
 
     # solution for time
     t_opt = np.hstack((0.0, np.cumsum(dt_opt)))
@@ -941,15 +966,19 @@ def opt_mintime():
 
     # Convert numpy arrays to pandas DataFrames
     t_opt = np.reshape(t_opt, (-1, 1))  # make t_opt a vertical vector
-    df0 = np.concatenate(
-        (t_opt, x_opt), axis=1
-    )  # combine t_opt with our state solution
+    
+    # solution for curvature
+    k_opt = np.array(k_opt)
+    k_opt = np.append(k_opt[-1], k_opt)
+    
+    df0 = np.column_stack(
+        (t_opt, k_opt, x_opt, u_opt)
+    )  
     df1 = pd.DataFrame(df0)  # reform the state as a dataframe
-    df2 = pd.DataFrame(u_opt)
-    df1 = pd.concat([df1, df2], axis=1)  # combine our state and control solutions
-
+    
     header = [
         "time",
+        "kappa",
         "v",
         "beta",
         "omega_z",
@@ -967,7 +996,7 @@ def opt_mintime():
     ]
 
     # Create a Pandas Excel writer using XlsxWriter as the engine
-    writer = pd.ExcelWriter("82324.xlsx", engine="xlsxwriter")
+    writer = pd.ExcelWriter("two_track_out2.xlsx", engine="xlsxwriter")
 
     # Write the dataframe to a excel sheet
     df1.to_excel(writer, sheet_name="Sheet1", index=False, header=header)
