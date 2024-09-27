@@ -11,13 +11,13 @@ import matplotlib.pyplot as plt
 
 
 # import our accumulator and motor models
-import accumulator
+#import accumulator
 import motor_model
 motor = motor_model.motor()
 
 
 
-def simulate(pack):
+def simulate():
     #Import track and vehicle files like OpenLap
     import track as tr
     import vehicle as veh
@@ -344,7 +344,7 @@ def simulate(pack):
 
 
     # Quasi-transient accumulator calculations
-    
+    '''
     # leave the option to not simulate with the pack
     pack_voltages = []
     pack_discharges = []
@@ -421,7 +421,7 @@ def simulate(pack):
     dt = np.divide(tr.dx, V)
     time = np.cumsum(dt)
     laptime = time[-1]
-
+    '''
 
     '''
     To optimize this properly, we should drain the accumulator after each point, then optimize accordingly
@@ -434,9 +434,8 @@ def simulate(pack):
 
     # Output all the data in a readable csv
 
-    header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)', 
-              'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Motor Power (W)', 'Current Draw (A)']
-    transient_output = pd.DataFrame(data=zip(time, V, motor_torque, brake_force, pack_voltages, pack_discharges, base_speeds, mot_powers, current_draws), columns=header)
+    header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)']
+    transient_output = pd.DataFrame(data=zip(time, V, motor_torque, brake_force), columns=header)
     
 
 
@@ -448,20 +447,20 @@ def simulate(pack):
 
 # Simulate 22 laps of endurance
 def simulate_endurance(pack, numLaps):
-    laptime0, energistics0, output_df = simulate(pack)
+    laptime0, energistics0, output_df = simulate()
 
     laptimes = [laptime0]
     energy_drains = [energistics0]              #total energy drained from the accumulator (estimate)
-    pack_failure = [pack.is_depleted()]         #check if the pack is depleted
+    #pack_failure = [pack.is_depleted()]         #check if the pack is depleted
     
     for lap in range(numLaps-1):
         
-        laptime, energy_drain, output_df_prime = simulate(pack)
+        laptime, energy_drain, output_df_prime = simulate()
         laptimes.append(laptime)
         energy_drains.append(energy_drain)
 
         quick_breaker = pack.is_depleted()
-        pack_failure.append(quick_breaker)
+        #pack_failure.append(quick_breaker)
         output_df = pd.concat([output_df, output_df_prime])
 
         if quick_breaker:
@@ -491,17 +490,17 @@ def simulate_endurance(pack, numLaps):
     # THE DISCREPANCY WE SAW BETWEEN ACCUMULATOR DRAINAGE AND OPENLAP DRAINAGE IS BC OF REGEN
     total_time = np.sum(laptimes)
     total_energy_drain = np.sum(energy_drains)
-    pack_failed = pack_failure[-1]
+    #pack_failed = pack_failure[-1]
 
 
-    return total_time, total_energy_drain, pack_failed
+    return total_time, total_energy_drain, False
 
 
 
 def simulate_pack(pack_data):
-    pack = accumulator.Pack()
-    pack.pack(pack_data[0], pack_data[1], pack_data[2]) 
-    laptime, energy_drain, transient_output = simulate(pack)
+    #pack = accumulator.Pack()
+    #pack.pack(pack_data[0], pack_data[1], pack_data[2]) 
+    laptime, energy_drain, transient_output = simulate()
 
     file_name = f"openloop_out.csv"
     transient_output.to_csv(file_name, sep=',', encoding='utf-8', index=False)

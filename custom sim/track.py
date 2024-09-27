@@ -124,7 +124,7 @@ def reload(trackfile):
     
     
     # Track excel file selection
-    base_name = "C:\\Users\\EJDRO\\OneDrive\\Documents\\GitHub\\FEBSim\\custom sim\\track_files\\"
+    base_name = 'track_files\\'
     filename = base_name + trackfile
     info = read_info(filename,'Shape')
 

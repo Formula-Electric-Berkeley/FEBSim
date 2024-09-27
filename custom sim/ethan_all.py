@@ -226,10 +226,10 @@ def autoX_sweep():
 def aero_sweep():    
     # used for points estimation
     ptsRef_filename = 'SN3_Points_Reference.xlsx'
-    numLaps = 22
+    numLaps = 1
 
     # loop over various motor_curves
-    power_caps = [30, 24, 20, 15]
+    power_caps = [60]#, 24, 20, 15]
 
     # Cl, Cd
     aero_coefficients = [#[-1.98, -1.33],            # High downforce config; negative = downforce, + is lift
@@ -243,7 +243,7 @@ def aero_sweep():
     # driver weight:        80
 
 
-    pack_dimension = [14, 4, 10]
+    pack_dimension = [16, 4, 8]
 
     # initialize our pack
     series, parallel, segment = pack_dimension
@@ -256,7 +256,7 @@ def aero_sweep():
 
     capacities = []
 
-    driver_masses = [45, 55, 65, 75, 90]
+    driver_masses = range(0, 150, 5)
     #base_mass = 231.0 + driver_mass
     with_aero = 245.0          # for high downforce config
 
@@ -275,7 +275,7 @@ def aero_sweep():
     Cds = []
 
     #start endurance
-    track.reload('Michigan_2021_Endurance.xlsx')
+    track.reload('Michigan_2022_AutoX.xlsx')
 
     for i, mass in enumerate(masses):
         for j, power_cap in enumerate(power_caps):
@@ -628,6 +628,7 @@ def get_points():
     return autocross_score, endurance_score
 
 
+aero_sweep()
 '''
 
 With aero: 5.88 s; 0.0029250976696563887 kWh
@@ -669,7 +670,6 @@ energy_new = energy_predicted * skidpad scale factor
 #points_from_spreadsheet()
 
 
-print(get_points())
 
 '''
 To validate aero package addition / removal
