@@ -6,7 +6,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 g = 9.81
-
+count = 0
 
 #increment or decrement j, mod j_max
 def next_point(j, j_max, mode, tr_config='Closed'):
@@ -44,7 +44,24 @@ def next_point(j, j_max, mode, tr_config='Closed'):
 
     return j_next, j
 
+# Rudimentary implementation of load sensitivity
+# Prior to slip angles => Add these this weekend
+def load_sensitivity(vertical_load):
+    
+    # Fit coefficients
+    max_load = 4500                     # 4500, 1.8, 0.5; use Desmos
+    load_sensitivity = 1.8              
+    center = 0.5
 
+    # Normalize the actual load between 0 and 1 based on the maximum load
+    normalized_load = vertical_load / max_load
+    
+    # Sigmoid function to simulate load sensitivity
+    dynamic_max_load = max_load / (1 + np.exp(-load_sensitivity * (normalized_load - center)))        
+
+    #print("{} {} ".format(vertical_load, dynamic_max_load))
+    return min(dynamic_max_load, vertical_load)
+    
 
 def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
     overshoot = False
@@ -92,9 +109,14 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
     dmx = factor_grip * veh.sens_x
     mux = factor_grip * veh.mu_x
     Nx = veh.mu_x_M * g
+
+
+    # Modify Fz, Wd
+    Fz = load_sensitivity(Wz - Aero_Df)
+    Wd = load_sensitivity(Wd)
     
     if np.sign(ay) != 0:
-        ay_max = (1 / M) * (np.sign(ay) * (muy + dmy * (Ny - (Wz - Aero_Df) / 4)) * (Wz - Aero_Df) + Wy)
+        ay_max = (1 / M) * (np.sign(ay) * (muy + dmy * (Ny - (Fz) / 4)) * (Fz) + Wy)
         if np.abs(ay / ay_max) > 1:
             #print("THIS SHOULD NOT HAPPEN")
             ellipse_multi = 0 #just a check to be safe
@@ -114,7 +136,7 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
         bps = 0
         ax_com = tps * ax_power_limit
     else:
-        ax_tyre_max = -(1 / M) * (mux + dmx * (Nx - (Wz - Aero_Df) / 4)) * (Wz - Aero_Df)
+        ax_tyre_max = -(1 / M) * (mux + dmx * (Nx - (Fz) / 4)) * (Fz)
         ax_tyre = ax_tyre_max * ellipse_multi
         fx_tyre = min([-ax_tyre, -ax_track_limit]) * M
         bps = max([fx_tyre, 0]) * veh.beta #again possible check
@@ -186,8 +208,10 @@ def adjust_torque(veh, tr, TPS_MAX, j, v, v_max_next):
     mux = factor_grip * veh.mu_x
     Nx = veh.mu_x_M * g
     
+    Fz = load_sensitivity(Wz - Aero_Df)
+    Wd = load_sensitivity(Wd)
     if np.sign(ay) != 0:
-        ay_max = (1 / M) * (np.sign(ay) * (muy + dmy * (Ny - (Wz - Aero_Df) / 4)) * (Wz - Aero_Df) + Wy)
+        ay_max = (1 / M) * (np.sign(ay) * (muy + dmy * (Ny - Fz / 4)) * Fz + Wy)
         if np.abs(ay / ay_max) > 1:
             #print("THIS SHOULD NOT HAPPEN")
             ellipse_multi = 0 #just a check to be safe
@@ -207,7 +231,7 @@ def adjust_torque(veh, tr, TPS_MAX, j, v, v_max_next):
         bps = 0
         ax_com = tps * ax_power_limit
     else:
-        ax_tyre_max = -(1 / M) * (mux + dmx * (Nx - (Wz - Aero_Df) / 4)) * (Wz - Aero_Df)
+        ax_tyre_max = -(1 / M) * (mux + dmx * (Nx - Fz / 4)) * Fz
         ax_tyre = ax_tyre_max * ellipse_multi
         fx_tyre = min([-ax_tyre, -ax_track_limit]) * M
         bps = max([fx_tyre, 0]) * veh.beta #again possible check
@@ -276,7 +300,11 @@ def vehicle_model_lat(veh, tr, p):
         dmx = factor_grip * veh.sens_x
         mux = factor_grip * veh.mu_x
         Nx = veh.mu_x_M * g
+
+        Wz = load_sensitivity(Wz)
         
+        
+        # TODO; change this to the proper values
         a = -np.sign(r) * dmy / 4 * D**2
         b = np.sign(r) * (muy * D + (dmy / 4) * (Ny * 4) * D - 2 * (dmy / 4) * Wz * D) - M * r
         c = np.sign(r) * (muy * Wz + (dmy / 4) * (Ny * 4) * Wz - (dmy / 4) * Wz**2) + Wy
@@ -310,8 +338,13 @@ def vehicle_model_lat(veh, tr, p):
             Wd = (factor_drive * Wz + (-factor_aero * Aero_Df)) / driven_wheels
             
             ax_drag = (Aero_Dr + Roll_Dr + Wx) / M
+
+            # Modify Fz, Wd
+            Fz = load_sensitivity(Wz - Aero_Df)
+            Wd = load_sensitivity(Wd)
+    
             
-            ay_max = np.sign(r) / M * (muy + dmy * (Ny - (Wz - Aero_Df) / 4)) * (Wz - Aero_Df)
+            ay_max = np.sign(r) / M * (muy + dmy * (Ny - (Fz) / 4)) * (Fz)
             
             ay_needed = v**2 * r + g * np.sin(np.radians(bank))
             
@@ -325,7 +358,7 @@ def vehicle_model_lat(veh, tr, p):
                 tps = max([min([1, scale]), 0])              
                 bps = 0
             else:
-                ax_tyre_max_dec = -1 / M * (mux + dmx * (Nx - (Wz - Aero_Df) / 4)) * (Wz - Aero_Df)
+                ax_tyre_max_dec = -1 / M * (mux + dmx * (Nx - (Fz) / 4)) * (Fz)
                 ay = ay_max * np.sqrt(1 - (ax_drag / ax_tyre_max_dec)**2)
                 ax_dec = ax_tyre_max_dec * np.sqrt(1 - (ay_needed / ay_max)**2)
                 fx_tyre = max([ax_drag, -ax_dec]) * M

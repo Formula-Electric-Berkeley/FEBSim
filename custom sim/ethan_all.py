@@ -301,7 +301,7 @@ def aero_sweep(numLaps, track_file, masses, aero_coefficients,
     df1 = pd.DataFrame(df0)
 
     # TODO; change this so it checks if the current file exists. I'm lazy
-    writer = pd.ExcelWriter('mass_power_sweep1.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter('aero_sweep_data.xlsx', engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
@@ -680,8 +680,17 @@ def sweep_wrapper():
                         #[-0.05, -0.52]]           # No aero package
 
 
-    #Cls = np.linspace(0.5, 3.5, 30)
-    #Cds = np.linspace()
+    num_coefficients = 15
+    Cls = np.linspace(0.5, 3, num_coefficients)
+    Cds = np.linspace(0.5, 3, num_coefficients)
+
+    aero_coeffs = []
+
+    for Cl in Cls:
+        for Cd in Cds:
+            aero_coeffs.append([-Cl, -Cd])
+
+
     # Electrical information
     power_caps = [60]#, 40]
     pack_dimensions = [[16, 4, 8]]          # array of pack dimensions. A single pack dimension has the form [series, parallel, segment]
@@ -690,7 +699,7 @@ def sweep_wrapper():
 
     
 
-    aero_sweep(numLaps, track_file, masses, aero_coefficients, pack_dimensions, safe_voltages, derating_bounds, power_caps, False)
+    aero_sweep(numLaps, track_file, masses, aero_coeffs, pack_dimensions, safe_voltages, derating_bounds, power_caps, False)
 
 sweep_wrapper()
 
