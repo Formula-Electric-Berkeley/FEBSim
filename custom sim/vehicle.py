@@ -382,7 +382,7 @@ def plotMotorCurve():
     plt.show()
 
 def reload():
-    filename = 'Vehicles/FEB_SN3_30kW.xlsx'
+    filename = 'vehicle_files/FEB_SN3_30kW.xlsx'
     
     info = read_info(filename,'Info')
     data = read_info(filename,'Torque Curve', cols="A:B")

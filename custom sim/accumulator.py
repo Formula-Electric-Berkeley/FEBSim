@@ -241,7 +241,7 @@ Pack Power:                         {round(self.cell_data["power"] / 1000)} kW')
         #print(current_per_cell)
 
         self.breaker_popped = False
-        current_cap = 60 #Amps
+        current_cap = 40 #Amps
 
 
         # Brownout protection: below 460 Volts, current cap -> TODO this was a hotfix for SN3

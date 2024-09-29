@@ -379,8 +379,8 @@ def simulate(pack):
     
 
 
-# Simulate 22 laps of endurance
-def simulate_endurance(pack, numLaps):
+# Simulate n laps of the currently loaded track
+def simulate_laps(pack, numLaps):
     laptime0, energistics0, output_df = simulate(pack)
 
     laptimes = [laptime0]
@@ -400,19 +400,6 @@ def simulate_endurance(pack, numLaps):
         if quick_breaker:
             print("Pack failure on lap {}".format(lap+2))
             break
-    
-    #basic_header = ['Laptimes (s)', 'Energy Drains (kWh)', 'Pack Failure']
-    #basic_output = pd.DataFrame(data=zip(laptimes, energy_drains, pack_failure), columns=basic_header)
-
-    #header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)', 
-    #          'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Kv', 'Motor Power (W)', 'Iq Current (A)']
-
-    #writer = pd.ExcelWriter('open_loop_out1.xlsx', engine='xlsxwriter')
-
-    #output_df.to_excel(writer, sheet_name='Main Output', index=False, header=header)
-    #basic_output.to_excel(writer, sheet_name='Basic Output', index=False, header=basic_header)
-
-    #writer.close()
     
 
     # compile the basic outputs for optimization
