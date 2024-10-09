@@ -9,7 +9,6 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
-
 # import our accumulator and motor models
 import accumulator
 import powertrain_model
@@ -379,8 +378,6 @@ def simulate(pack):
 
     # Returns laptime in seconds, energy_drain in kWh
     return laptime, energy_drain, transient_output
-    
-
 
 # Simulate n laps of the currently loaded track
 def simulate_laps(pack, numLaps):
@@ -391,8 +388,8 @@ def simulate_laps(pack, numLaps):
     pack_failure = [pack.is_depleted()]         #check if the pack is depleted
     
     for lap in range(numLaps-1):
-        
         laptime, energy_drain, output_df_prime = simulate(pack)
+        output_df_prime["Time (s)"] = output_df_prime["Time (s)"] + sum(laptimes)
         laptimes.append(laptime)
         energy_drains.append(energy_drain)
 
@@ -403,6 +400,8 @@ def simulate_laps(pack, numLaps):
         if quick_breaker:
             print("Pack failure on lap {}".format(lap+2))
             break
+
+        
     
 
     # compile the basic outputs for optimization
