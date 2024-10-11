@@ -23,7 +23,7 @@ mesh_size = 5.25 # [m]
 
 
 # Track excel file selection
-filename = 'tracks/test_track.xlsx'
+filename = 'track_files/test_track.xlsx'
 info = read_info(filename,'Shape')
 
 

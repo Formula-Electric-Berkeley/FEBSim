@@ -5,7 +5,7 @@ import vehicle
 import open_loop
 import numpy as np
 import pandas as pd
-import track
+from track import Track
 import accumulator 
 
 from mpl_toolkits import mplot3d
@@ -163,14 +163,14 @@ def autoX_sweep():
     accel_times = []
 
     #start endurance
-    track.reload('Michigan_2022_AutoX.xlsx')
+    track = Track('Michigan_2022_AutoX.xlsx')
 
     for i, aero_package in enumerate(aero_coefficients):
         for j, power_cap in enumerate(power_caps):
             pack.reset()
             vehicle.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
 
-            laptime, energy, transient_output = open_loop.simulate(pack)
+            laptime, energy, transient_output = open_loop.simulate(pack, track)
 
             pack_failed = pack.is_depleted()
 
@@ -236,7 +236,7 @@ def aero_sweep(numLaps, track_file, masses, aero_coefficients,
     capacities = []
 
     # load the track information
-    track.reload(track_file)
+    track = Track(track_file)
 
     for k, pack_size in enumerate(pack_dimensions):
         # initialize our pack
@@ -264,7 +264,7 @@ def aero_sweep(numLaps, track_file, masses, aero_coefficients,
                     pack.reset()
                     vehicle.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
 
-                    laptime, energy, pack_failed, output_df = open_loop.simulate_laps(pack, numLaps)
+                    laptime, energy, pack_failed, output_df = open_loop.simulate_laps(pack, numLaps, track)
 
                     if not (pack_failed):
                         end_times.append(laptime)
@@ -354,7 +354,7 @@ def points_from_spreadsheet():
 def optimize_endurance(endurance_trackfile, possible_packs, power_caps, numLaps, header):
     
     # load our endurance track into the sim
-    track.reload(endurance_trackfile)
+    track = Track(endurance_trackfile)
 
     # set up our output vectors
     masses = []
@@ -399,7 +399,7 @@ def optimize_endurance(endurance_trackfile, possible_packs, power_caps, numLaps,
             vehicle.soft_reload(masses[i], power_caps[j1]) # reload our vehicle to have the new data
 
             # simulate endurance
-            laptime, energy, pack_failure, _ = open_loop.simulate_laps(pack, numLaps)
+            laptime, energy, pack_failure, _ = open_loop.simulate_laps(pack, numLaps, track)
 
             # if we cannot complete endurance with this power cap, drop the cap
             if pack_failure:
@@ -586,7 +586,7 @@ def get_points():
     cap = 30 # kW
     autoX_trackfile = "Michigan_2022_AutoX.xlsx" # Placeholder
     
-    track.reload(autoX_trackfile)
+    track = Track(autoX_trackfile)
 
     numEnduranceLaps = 22
     
@@ -610,7 +610,7 @@ def get_points():
 
     vehicle.soft_reload(mass, power_cap = cap, new_aero= no_aero)
 
-    autocross_time, autocross_energy, _ = open_loop.simulate(pack)
+    autocross_time, autocross_energy, _ = open_loop.simulate(pack, track)
 
     print(f"Autocross completed in {round(autocross_time, 2)} seconds using {round(autocross_energy, 2)} kWh.")
 
@@ -632,7 +632,7 @@ def get_points():
     # Load the endurance track and reset the vehicle
     endurance_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
     # Set grip factor of 0.7
-    track.reload(endurance_trackfile, grip=0.7)
+    endurance_track = Track(endurance_trackfile, grip=0.7)
     cap = 20
 
     pack.reset()
@@ -641,7 +641,7 @@ def get_points():
     
 
 
-    endurance_time, endurance_energy, _, _ = open_loop.simulate_laps(pack, numEnduranceLaps)
+    endurance_time, endurance_energy, _, _ = open_loop.simulate_laps(pack, numEnduranceLaps, track)
 
     print(f"Endurance completed in {round(endurance_time, 2)} seconds using {round(endurance_energy, 2)} kWh.")
 
