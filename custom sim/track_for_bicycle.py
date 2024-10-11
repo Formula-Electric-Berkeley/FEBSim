@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
-
+import os
 
 
 def read_info(workbook_file, sheet_name=1, start_row=2, end_row=10000, cols="A:C"):
@@ -23,7 +23,9 @@ mesh_size = 5.25 # [m]
 
 
 # Track excel file selection
-filename = 'tracks/test_track.xlsx'
+
+
+filename = 'track_files/test_track.xlsx' 
 info = read_info(filename,'Shape')
 
 

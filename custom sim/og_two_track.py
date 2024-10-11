@@ -12,17 +12,13 @@ import vehicle as veh
 import powertrain_model
 from scipy.interpolate import interp1d
 
-
-# PHYSICAL CONSTANTS
-g = 9.81  # [m/s^2]
-
-# INSTANTIATE POWERTRAIN
+# Instantiate the powertrain
 motor = powertrain_model.motor()
 diff = powertrain_model.drexler_differential()
 
-# DEFINE TIRE CONSTANTS
+# Define tire constants
 mu = 0.75  # coefficient of friction for tires
-# Pacejka Model
+# pacejka model
 Bx = 16
 Cx = 1.58
 Ex = 0.1
@@ -30,23 +26,6 @@ Ex = 0.1
 By = 13
 Cy = 1.45
 Ey = -0.8
-
-
-# DEFINE PHYSICS CONSTRAINTS FROM VEHICLE
-mass = veh.M  # [kg]
-lf = veh.lf  # front wheelbase length (from COM to front axle)
-lr = veh.lr  # rear  wheelbase length
-L = lf + lr  # total wheelbase length
-wf = veh.wf  # front axle width (distance between centers of wheels)
-wr = veh.wr  # rear axle width
-
-Je = veh.Je  # engine moment of inertia TODO -> modify with real data
-Jw = veh.Jw  # wheel moment of inertia
-re = veh.re  # effective wheel radius
-rb = veh.rb  # effective brake radius
-Iz = veh.Iz  # vehicle moment of inertia about z axis
-
-
 
 
 # TODO: replace with Nick's tire model later
@@ -74,11 +53,18 @@ def combined_slip_forces(s, a, Fn):
     return Fx, Fy
 
 
-# ------------------------------------------------------------------------------------------------------------------
-# GET TRACK INFORMATION --------------------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------------------------------------------
+'''
+Ethan's changelog: 9/22
+The sim works without wheel speeds and it outputs reasonable data, from which you can reconstruct track geometry
 
-def track_info():
+
+'''
+
+def opt_mintime():
+    # ------------------------------------------------------------------------------------------------------------------
+    # GET TRACK INFORMATION --------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
+
     # get the curvature of the track centerline at each mesh point
     kappa_refline_cl = tr.curvatures
 
@@ -95,18 +81,17 @@ def track_info():
     # interpolate track data from reference line to the number of steps sampled
     kappa_interp = ca.interpolant("kappa_interp", "linear", [steps], kappa_refline_cl)
 
-    return N, mesh_point_separations, kappa_interp
-
-
-# ------------------------------------------------------------------------------------------------------------------
-# DIRECT GAUSS-LEGENDRE COLLOCATION --------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------------------------------------------
-def GL_collocate(d):
+    # ------------------------------------------------------------------------------------------------------------------
+    # DIRECT GAUSS-LEGENDRE COLLOCATION --------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
     """
     In this section, we represent our state and command trajectories as a spline
     We construct our spline using Lagrange polynomials to make interpolation easier
     """
-    # legendre collocation points; gives the temporal location of the collocation points along our spline
+    # degree of interpolating polynomial ("sweet spot" according to MIT robotics paper)
+    d = 3
+
+    # legendre collocation points ; gives the temporal location of the collocation points along our spline
     tau = np.append(0, ca.collocation_points(d, "legendre"))
 
     # coefficient matrix for the collocation equation
@@ -141,39 +126,43 @@ def GL_collocate(d):
         # this is used for approximating the integral of Lagrange polynomials over a finite element
         B[j] = pint(1.0)
 
-    return D, C, tau, B
-
-
-# ------------------------------------------------------------------------------------------------------------------
-# STATE VARIABLES --------------------------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------------------------------------------
-def state_vars(nx, v_s, beta_s, omega_z_s, n_s, xi_s, wheel_scale):
+    # ------------------------------------------------------------------------------------------------------------------
+    # STATE VARIABLES --------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
     """
     In the next two sections, we define our state and control variables, as well as their (approximate) relative magnitudes 
     CasADi's NLP converges best when we give it normalized input variables because our problem spans several orders of magnitude
     (e.g. max torque is 5500 Nm, max steer is 0.66 rad)
     """
 
+    # number of state variables
+    nx = 9
+
     # velocity [m/s]
     v_n = ca.SX.sym(
         "v_n"
     )  # we give CasADi's solver normalized variables to improve convergence
+    v_s = 30  # scale the normalized vector
     v = v_s * v_n
 
     # sideslip angle [rad/s]
     beta_n = ca.SX.sym("beta_n")
+    beta_s = 0.5
     beta = beta_s * beta_n
 
     # yaw rate [rad/s]
     omega_z_n = ca.SX.sym("omega_z_n")
+    omega_z_s = 1
     omega_z = omega_z_s * omega_z_n
 
     # lateral distance to reference line (positive = left) [m]
     n_n = ca.SX.sym("n_n")
+    n_s = 5.0
     n = n_s * n_n
 
     # relative angle to tangent on reference line [rad]
     xi_n = ca.SX.sym("xi_n")
+    xi_s = 1.0
     xi = xi_s * xi_n
 
     # wheel angular velocities [rad/s]
@@ -182,6 +171,7 @@ def state_vars(nx, v_s, beta_s, omega_z_s, n_s, xi_s, wheel_scale):
     wrl_n = ca.SX.sym("wrl_n")
     wrr_n = ca.SX.sym("wrr_n")
 
+    wheel_scale = 300
     wfr_s = wheel_scale
     wfl_s = wheel_scale
     wrr_s = wheel_scale
@@ -197,34 +187,36 @@ def state_vars(nx, v_s, beta_s, omega_z_s, n_s, xi_s, wheel_scale):
     # vertical vector for the state variables
     x = ca.vertcat(v_n, beta_n, omega_z_n, n_n, xi_n, wfr_n, wfl_n, wrl_n, wrr_n)
 
-    return v, omega_z, omega_z_s, wfr, wfl, wrr, wrl, n, x, xi, x_s, beta
+    # ------------------------------------------------------------------------------------------------------------------
+    # CONTROL VARIABLES ------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
 
-
-
-# ------------------------------------------------------------------------------------------------------------------
-# CONTROL VARIABLES ------------------------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------------------------------------------
-
-def control_vars(nu, delta_s, torque_drive_s, f_brake_s, gamma_x_s, gamma_y_s):
+    # number of control variables
+    nu = 5
 
     # steer angle [rad]
     delta_n = ca.SX.sym("delta_n")
+    delta_s = 0.5
     delta = delta_s * delta_n
 
     # positive drive torque from the motor [N-m]
     torque_drive_n = ca.SX.sym("f_drive_n")
+    torque_drive_s = 6000.0
     torque_drive = torque_drive_s * torque_drive_n
 
     # negative longitudinal force (brake) [N]
     f_brake_n = ca.SX.sym("f_brake_n")
+    f_brake_s = 20000.0
     f_brake = f_brake_s * f_brake_n
 
     # longitudinal wheel load transfer [N]
     gamma_x_n = ca.SX.sym("gamma_x_n")
+    gamma_x_s = 5000.0
     gamma_x = gamma_x_s * gamma_x_n
 
     # lateral wheel load transfer [N]
     gamma_y_n = ca.SX.sym("gamma_y_n")
+    gamma_y_s = 5000.0
     gamma_y = gamma_y_s * gamma_y_n
 
     # curvature of reference line [rad/m] (allows CasADi to interpret kappa in our math below)
@@ -235,45 +227,6 @@ def control_vars(nu, delta_s, torque_drive_s, f_brake_s, gamma_x_s, gamma_y_s):
 
     # put all controls together
     u = ca.vertcat(delta_n, torque_drive_n, f_brake_n, gamma_x_n, gamma_y_n)
-
-    return gamma_x, gamma_y, delta, f_brake, kappa, torque_drive, u_s, u
-
-
-'''
-Ethan's changelog: 9/22
-The sim works without wheel speeds and it outputs reasonable data, from which you can reconstruct track geometry
-'''
-
-def opt_mintime():
-
-    N, mesh_point_separations, kappa_interp = track_info()
-
-        
-    d = 3     # degree of interpolating polynomial ("sweet spot" according to MIT robotics paper)
-    D, C, tau, B = GL_collocate(d)
-
-
-    nx = 9    # number of state variables
-    v_s = 30  # scale the normalized vector
-    beta_s = 0.5
-    omega_z_s = 1
-    n_s = 5.0
-    xi_s = 1.0
-    wheel_scale = 300
-
-    v, omega_z, omega_z_s, wfr, wfl, wrr, wrl, n, x, xi, x_s, beta = state_vars(nx, v_s, beta_s, omega_z_s, n_s, xi_s, wheel_scale)
-
-
-    nu = 5   # number of control variables
-    delta_s = 0.5
-    torque_drive_s = 6000.0
-    f_brake_s = 20000.0
-    gamma_x_s = 5000.0
-    gamma_y_s = 5000.0
-
-    gamma_x, gamma_y, delta, f_brake, kappa, torque_drive, u_s, u = control_vars(nu, delta_s, torque_drive_s, f_brake_s, gamma_x_s, gamma_y_s)
-
-
 
     # ------------------------------------------------------------------------------------------------------------------
     # MODEL PHYSICS ----------------------------------------------------------------------------------------------------
@@ -288,6 +241,21 @@ def opt_mintime():
     TODO: ensure the physics is correct -> use Ackermann geometry
     Fix this week
     """
+
+    # define physical constants
+    g = 9.81  # [m/s^2]
+    mass = veh.M  # [kg]
+    lf = veh.lf  # front wheelbase length (from COM to front axle)
+    lr = veh.lr  # rear  wheelbase length
+    L = lf + lr  # total wheelbase length
+    wf = veh.wf  # front axle width (distance between centers of wheels)
+    wr = veh.wr  # rear axle width
+
+    Je = veh.Je  # engine moment of inertia TODO -> modify with real data
+    Jw = veh.Jw  # wheel moment of inertia
+    re = veh.re  # effective wheel radius
+    rb = veh.rb  # effective brake radius
+    Iz = veh.Iz  # vehicle moment of inertia about z axis
 
     # compute normal forces at each wheel, assumes wf roughly equals wr
     # this will be used by our tire model to compute grip forces at each wheel
@@ -353,7 +321,7 @@ def opt_mintime():
     # drag forces
     Fx_aero = (
         -veh.drag_coeff * vx * ca.fabs(vx)
-    )  # TODO: add rolling resistance here later
+    )  # TODO add rolling resistance here later
 
     # compute the net force and torque on the vehicle
     Fx = (
