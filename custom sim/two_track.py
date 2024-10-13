@@ -239,7 +239,7 @@ def control_vars(nu, delta_s, torque_drive_s, f_brake_s, gamma_x_s, gamma_y_s):
 
 def wheel_calcs(gamma_x, gamma_y, vx, vy, omega_z, delta, f_brake, wfr, wfl, wrr, wrl):
 
-    fr, fl, rr, rl = "front right", "front left", "rear right", "reaf left"
+    fr, fl, rr, rl = "front right", "front left", "rear right", "rear left"
     x, y = " x", " y"
     lat, long = " lat", " long"
 
@@ -378,16 +378,16 @@ def opt_mintime():
     vx = v * ca.cos(beta)
     vy = v * ca.sin(beta)
 
-    wheel_calculations = wheel_calcs()
+    wheel_calculations = wheel_calcs(gamma_x, gamma_y, vx, vy, omega_z, delta, f_brake, wfr, wfl, wrr, wrl)
+    print(wheel_calculations)
 
-    normal_forces, body_frame_vels, wheel_frame_vels, slip_angles, slip_ratios, brake_forces, brake_torques = \
-    wheel_calculations["normal forces"](),
-    wheel_calculations["body frame  vels"](), 
-    wheel_calculations["wheel frame vels"](), 
-    wheel_calculations["slip angles"](), 
-    wheel_calculations["slip ratios"](), 
-    wheel_calculations["brake forces"](), 
-    wheel_calculations["brake torques"]()
+    normal_forces = wheel_calculations["normal forces"]()
+    body_frame_vels = wheel_calculations["body frame vels"]()
+    wheel_frame_vels = wheel_calculations["wheel frame vels"]()
+    slip_angles = wheel_calculations["slip angles"]() 
+    slip_ratios = wheel_calculations["slip ratios"]()
+    brake_forces = wheel_calculations["brake forces"]()
+    brake_torques = wheel_calculations["brake torques"]()
 
     F_Nfr = normal_forces["front right"]
     F_Nfl = normal_forces["front left"]
@@ -399,7 +399,7 @@ def opt_mintime():
     vx_fl = body_frame_vels["front left x"]
     vy_fl = body_frame_vels["front left y"]
     vx_rr = body_frame_vels["rear right x"]
-    vy_rr = body_frame_vels["rear rigth y"]
+    vy_rr = body_frame_vels["rear right y"]
     vx_rl = body_frame_vels["rear left x"]
     vy_rl = body_frame_vels["rear left y"]
 
