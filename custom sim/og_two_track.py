@@ -279,7 +279,7 @@ def opt_mintime():
     vy_rl = vy - lr * omega_z
 
     # compute wheel-frame velocity components (slip ratio/angle are defined in the frame of each wheel)
-    vlfr = vx_fr * ca.cos(delta) + vy_fr * ca.sin(delta)
+    vlfr = vx_fr * ca.cos(delta) + vy_fr * ca.sin(delta) 
     vtfr = vy_fr * ca.cos(delta) - vx_fr * ca.sin(delta)
     vlfl = vx_fl * ca.cos(delta) + vy_fl * ca.sin(delta)
     vtfl = vy_fl * ca.cos(delta) - vx_fl * ca.sin(delta)
