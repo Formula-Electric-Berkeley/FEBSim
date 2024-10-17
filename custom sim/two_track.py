@@ -237,22 +237,16 @@ def control_vars(nu, delta_s, torque_drive_s, f_brake_s, gamma_x_s, gamma_y_s):
     return gamma_x, gamma_y, delta, f_brake, kappa, torque_drive, u_s, u
 
 
-
-
-def wheel_calcs(gamma_x, gamma_y, vx, vy, omega_z, delta, f_brake, wfr, wfl, wrr, wrl):
-
-    fr, fl, rr, rl = "front right", "front left", "rear right", "rear left"
-    x, y = " x", " y"
-    lat, long = " lat", " long"
-
-    # compute normal forces at each wheel, assumes wf roughly equals wr
-    # this will be used by our tire model to compute grip forces at each wheel
+def normal_forces(gamma_x, gamma_y):
     F_Nfr = (mass * g * lr) / (L * 2) + gamma_x - gamma_y
     F_Nfl = (mass * g * lr) / (L * 2) + gamma_x + gamma_y
     F_Nrr = (mass * g * lf) / (L * 2) - gamma_x - gamma_y
     F_Nrl = (mass * g * lf) / (L * 2) - gamma_x + gamma_y
 
-    # compute body-frame components of linear velocity at each wheel
+    return {"front right": F_Nfr, "front left": F_Nfl, "rear right": F_Nrr, "rear left": F_Nrl}
+
+
+def body_frame_vels(vx, vy, omega_z):
     vx_fr = vx + wf / 2 * omega_z
     vy_fr = vy + lf * omega_z
     vx_fl = vx - wf / 2 * omega_z
@@ -262,9 +256,13 @@ def wheel_calcs(gamma_x, gamma_y, vx, vy, omega_z, delta, f_brake, wfr, wfl, wrr
     vx_rl = vx - wr / 2 * omega_z
     vy_rl = vy - lr * omega_z
 
+    return {"front right x": vx_fr, "front right y": vy_fr, "front left x": vx_fl, "front left y": vy_fl, "rear right x": vx_rr, "rear right y": vy_rr, "rear left x": vx_rl, "rear left y": vy_rl}
+
+def wheel_frame_vels(vx_fr, vy_fr, vx_fl, vy_fl, vx_rr, vy_rr, vx_rl, vy_rl, delta):
+
     # compute wheel-frame velocity components (slip ratio/angle are defined in the frame of each wheel)
     vlfr = vx_fr * ca.cos(delta) + vy_fr * ca.sin(delta) 
-    vtfr = vy_fr * ca.cos(delta) - vx_fr * ca.sin(delta) 
+    vtfr = vy_fr * ca.cos(delta) - vx_fr * ca.sin(delta)
     vlfl = vx_fl * ca.cos(delta) + vy_fl * ca.sin(delta)
     vtfl = vy_fl * ca.cos(delta) - vx_fl * ca.sin(delta)
     vlrr = vx_rr
@@ -272,11 +270,20 @@ def wheel_calcs(gamma_x, gamma_y, vx, vy, omega_z, delta, f_brake, wfr, wfl, wrr
     vlrl = vx_rl
     vtrl = vy_rl
 
+    return {"front right long": vlfr, "front right lat": vtfr, "front left long": vlfl, "front left lat": vtfl, "rear right long": vlrr, "rear right lat": vtrr, "rear left long": vlrl, "rear left lat": vtrl} 
+
+
+def slip_angles(vtfr, vlfr, vtfl, vlfl, vtrr, vlrr, vtrl, vlrl):
+
     # compute the slip angles from the velocities at each wheel
-    alpha_fr = -ca.arctan(vtfr / ca.fabs(vlfr))  
+    alpha_fr = -ca.arctan(vtfr / ca.fabs(vlfr)) 
     alpha_fl = -ca.arctan(vtfl / ca.fabs(vlfl))
     alpha_rr = -ca.arctan(vtrr / ca.fabs(vlrr))
     alpha_rl = -ca.arctan(vtrl / ca.fabs(vlrl))
+
+    return {"front right": alpha_fr, "front left": alpha_fl, "rear right": alpha_rr, "rear left": alpha_rl}
+
+def slip_ratios(wfr, wfl, wrr, wrl, vlfr, vlfl, vlrr, vlrl):
 
     # compute the slip ratios
     sigma_fr = (re * wfr - vlfr) / ca.fabs(vlfr)
@@ -284,12 +291,37 @@ def wheel_calcs(gamma_x, gamma_y, vx, vy, omega_z, delta, f_brake, wfr, wfl, wrr
     sigma_rr = (re * wrr - vlrr) / ca.fabs(vlrr)
     sigma_rl = (re * wrl - vlrl) / ca.fabs(vlrl)
 
-    # distribute commanded brake force to the wheels based on our vehicle's brake force distribution
-    F_brake_fr = veh.brake_fr * f_brake  
-    F_brake_fl = veh.brake_fl * f_brake
-    F_brake_rl = veh.brake_rl * f_brake
-    F_brake_rr = veh.brake_rr * f_brake
+    return {"front right": sigma_fr, "front left": sigma_fl, "rear right": sigma_rr, "rear left": sigma_rl}
 
+
+def body_frame_forces(Flfr, Ftfr, Flfl, Ftfl, Flrr, Ftrr, Flrl, Ftrl, delta):
+
+    # change wheel forces to body frame
+    Fx_fr = Flfr * ca.cos(delta) - Ftfr * ca.sin(delta)
+    Fy_fr = Flfr * ca.sin(delta) + Ftfr * ca.cos(delta)
+    Fx_fl = Flfl * ca.cos(delta) - Ftfl * ca.sin(delta)
+    Fy_fl = Flfl * ca.sin(delta) + Ftfl * ca.cos(delta)
+    Fx_rr = Flrr
+    Fy_rr = Ftrr
+    Fx_rl = Flrl    
+    Fy_rl = Ftrl
+
+    return {"front right x": Fx_fr, "front right y": Fy_fr, "front left x": Fx_fl, "front left y": Fy_fl, "rear right x": Fx_rr, "rear right y": Fy_rr, "rear left x": Fx_rl, "rear left y": Fy_rl}
+
+
+def brake_forces(f_brake):
+
+    # distribute commanded brake force to the wheels based on our vehicle's brake force distribution
+    F_brake_fr = veh.brake_fr * f_brake
+    F_brake_fl = veh.brake_fl * f_brake
+    F_brake_rr = veh.brake_rr * f_brake
+    F_brake_rl = veh.brake_rl * f_brake
+
+    return {"front right": F_brake_fr, "front left": F_brake_fl, "rear right": F_brake_rr, "rear left": F_brake_rl}
+
+
+def brake_torques(F_brake_fr, F_brake_fl, F_brake_rr, F_brake_rl):
+    
     # calculate the effective torque experienced by each wheel due to braking
     # this partly determines the rate of change of the angular velocity of each wheel, which in turn is used to compute the slip ratio
     torque_brake_fr = rb * F_brake_fr
@@ -297,36 +329,7 @@ def wheel_calcs(gamma_x, gamma_y, vx, vy, omega_z, delta, f_brake, wfr, wfl, wrr
     torque_brake_rr = rb * F_brake_rr
     torque_brake_rl = rb * F_brake_rl
     
-
-    def normal_force():
-        return {fr: F_Nfr, fl: F_Nfl, rr: F_Nrr, rl: F_Nrl}
-
-    def body_frame_vel():
-        return {fr + x: vx_fr, fr + y: vy_fr, fl + x: vx_fl, fl + y: vy_fl, rr + x: vx_rr, rr + y: vy_rr, rl + x: vx_rl, rl + y: vy_rl}
-    
-    def wheel_frame_vel():
-        return {fr + long: vlfr, fr + lat: vtfr, fl + long: vlfl, fl + lat: vtfl, rr + long: vlrr, rr + lat: vtrr, rl + long: vlrl, rl + lat: vtrl}
-
-    def slip_angle():
-        return {fr: alpha_fr, fl: alpha_fl, rr: alpha_rr, rl: alpha_rl}
-    
-    def slip_ratio():
-        return {fr: sigma_fr, fl: sigma_fl, rr: sigma_rr, rl: sigma_rl}
-
-    def brake_force():
-        return {fr: F_brake_fr, fl: F_brake_fl, rr: F_brake_rr, rl: F_brake_rl}
-
-    def brake_torque():
-        return {fr: torque_brake_fr, fl: torque_brake_fl, rr: torque_brake_rr, rl: torque_brake_rl}
-    
-    return {"normal forces": normal_force, 
-            "body frame vels": body_frame_vel, 
-            "wheel frame vels": wheel_frame_vel, 
-            "slip angles": slip_angle, 
-            "slip ratios": slip_ratio, 
-            "brake forces": brake_force, 
-            "brake torques": brake_torque}
-
+    return {"front right": torque_brake_fr, "front left": torque_brake_fl, "rear right": torque_brake_rr, "rear left": torque_brake_rl}
 
 '''
 Ethan's changelog: 9/22
@@ -375,60 +378,68 @@ def opt_mintime():
     TODO: ensure the physics is correct -> use Ackermann geometry
     Fix this week
     """
-    # project velocity to longitudinal and lateral vehicle axes (for eventual calculation of drag and slip angle/ratio)
+    g = 9.81
+
+    F_N = normal_forces(gamma_x, gamma_y)
+    F_Nfr = F_N["front right"]
+    F_Nfl = F_N["front left"]
+    F_Nrr = F_N["rear right"]
+    F_Nrl = F_N["rear left"]
+
     vx = v * ca.cos(beta)
     vy = v * ca.sin(beta)
 
-    wheel_calculations = wheel_calcs(gamma_x, gamma_y, vx, vy, omega_z, delta, f_brake, wfr, wfl, wrr, wrl)
+    v_body = body_frame_vels(vx, vy, omega_z)
+    vx_fr = v_body["front right x"]
+    vy_fr = v_body["front right y"]
+    vx_fl = v_body["front left x"]
+    vy_fl = v_body["front left y"]
+    vx_rr = v_body["rear right x"]
+    vy_rr = v_body["rear right y"]
+    vx_rl = v_body["rear left x"]
+    vy_rl = v_body["rear left y"]
 
-    normal_forces = wheel_calculations["normal forces"]()
-    body_frame_vels = wheel_calculations["body frame vels"]()
-    wheel_frame_vels = wheel_calculations["wheel frame vels"]()
-    slip_angles = wheel_calculations["slip angles"]() 
-    slip_ratios = wheel_calculations["slip ratios"]()
-    brake_forces = wheel_calculations["brake forces"]()
-    brake_torques = wheel_calculations["brake torques"]()
+    v_wheel = wheel_frame_vels(vx_fr, vy_fr, vx_fl, vy_fl, vx_rr, vy_rr, vx_rl, vy_rl, delta)
+    vlfr = v_wheel["front right long"]
+    vtfr = v_wheel["front right lat"]
+    vlfl = v_wheel["front left long"]
+    vtfl = v_wheel["front left lat"]
+    vlrr = v_wheel["rear right long"]
+    vtrr = v_wheel["rear right lat"]
+    vlrl = v_wheel["rear left long"]
+    vtrl = v_wheel["rear left lat"]
 
-    F_Nfr = normal_forces["front right"]
-    F_Nfl = normal_forces["front left"]
-    F_Nrr = normal_forces["rear right"]
-    F_Nrl = normal_forces["rear left"]
+    alpha = slip_angles(vtfr, vlfr, vtfl, vlfl, vtrr, vlrr, vtrl, vlrl)
+    alpha_fr = alpha["front right"]
+    alpha_fl = alpha["front left"]
+    alpha_rr = alpha["rear right"]
+    alpha_rl = alpha["rear left"]
 
-    print(normal_forces.values())
+    sigma = slip_ratios(wfr, wfl, wrr, wrl, vlfr, vlfl, vlrr, vlrl)
+    sigma_fr = sigma["front right"]
+    sigma_fl = sigma["front left"]
+    sigma_rr = sigma["rear right"]
+    sigma_rl = sigma["rear left"]
 
-
-    # compute the slip angles from the velocities at each wheel
-    alpha_fr = slip_angles["front right"]
-    alpha_fl = slip_angles["front left"]
-    alpha_rr = slip_angles["rear right"]
-    alpha_rl = slip_angles["rear left"]
-
-    # compute the slip ratios
-    sigma_fr = slip_angles["front right"]
-    sigma_fl = slip_angles["front left"]
-    sigma_rr = slip_angles["rear right"]
-    sigma_rl = slip_angles["rear left"]
-
-    # compute wheel grip forces in the wheel frame
     Flfr, Ftfr = combined_slip_forces(sigma_fr, alpha_fr, F_Nfr)  
     Flfl, Ftfl = combined_slip_forces(sigma_fl, alpha_fl, F_Nfl)
     Flrr, Ftrr = combined_slip_forces(sigma_rr, alpha_rr, F_Nrr)
     Flrl, Ftrl = combined_slip_forces(sigma_rl, alpha_rl, F_Nrl)
 
-    # change wheel forces to body frame
-    Fx_fr = Flfr * ca.cos(delta) - Ftfr * ca.sin(delta)
-    Fy_fr = Flfr * ca.sin(delta) + Ftfr * ca.cos(delta)
-    Fx_fl = Flfl * ca.cos(delta) - Ftfl * ca.sin(delta)
-    Fy_fl = Flfl * ca.sin(delta) + Ftfl * ca.cos(delta)
-    Fx_rr = Flrr
-    Fy_rr = Ftrr
-    Fx_rl = Flrl    # Driven wheels are oriented parallel to the car in RWD
-    Fy_rl = Ftrl
+    body_F = body_frame_forces(Flfr, Ftfr, Flfl, Ftfl, Flrr, Ftrr, Flrl, Ftrl, delta)
+    Fx_fr = body_F["front right x"]
+    Fy_fr = body_F["front right y"]
+    Fx_fl = body_F["front left x"]
+    Fy_fl = body_F["front left y"]
+    Fx_rr = body_F["rear right x"]
+    Fy_rr = body_F["rear right y"]
+    Fx_rl = body_F["rear left x"]   
+    Fy_rl = body_F["rear left y"]
 
     # drag forces
     Fx_aero = (
         -veh.drag_coeff * vx * ca.fabs(vx)
-    )  # TODO: add rolling resistance here later
+    )  # TODO add rolling resistance here later
 
     # compute the net force and torque on the vehicle
     Fx = (
@@ -445,12 +456,18 @@ def opt_mintime():
         + wr / 2 * (Fx_rr - Fx_rl)
     )  # net torque about z axis
 
-    # calculate the effective torque experienced by each wheel due to braking
-    # this partly determines the rate of change of the angular velocity of each wheel, which in turn is used to compute the slip ratio
-    torque_brake_fr = brake_torques["front right"]
-    torque_brake_fl = brake_torques["front left"]
-    torque_brake_rr = brake_torques["rear right"]
-    torque_brake_rl = brake_torques["rear left"]
+    F_brake = brake_forces(f_brake)
+    F_brake_fr = F_brake["front right"]
+    F_brake_fl = F_brake["front left"]
+    F_brake_rr = F_brake["rear right"]
+    F_brake_rl = F_brake["rear left"]
+
+    torque_brake = brake_torques(F_brake_fr, F_brake_fl, F_brake_rr, F_brake_rl)
+    torque_brake_fr = torque_brake["front right"]
+    torque_brake_fl = torque_brake["front left"]
+    torque_brake_rr = torque_brake["rear right"]
+    torque_brake_rl = torque_brake["rear left"]
+
 
 
     # ------------------------------------------------------------------------------------------------------------------
