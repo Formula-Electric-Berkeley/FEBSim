@@ -264,6 +264,8 @@ def opt_mintime():
     F_Nrr = (mass * g * lf) / (L * 2) - gamma_x - gamma_y
     F_Nrl = (mass * g * lf) / (L * 2) - gamma_x + gamma_y
 
+    print(F_Nfr, F_Nfl, F_Nrr, F_Nrl)
+
     # project velocity to longitudinal and lateral vehicle axes (for eventual calculation of drag and slip angle/ratio)
     vx = v * ca.cos(beta)
     vy = v * ca.sin(beta)
@@ -350,6 +352,7 @@ def opt_mintime():
     torque_brake_fl = rb * F_brake_fl
     torque_brake_rr = rb * F_brake_rr
     torque_brake_rl = rb * F_brake_rl
+
 
     # ------------------------------------------------------------------------------------------------------------------
     # DERIVATIVES ------------------------------------------------------------------------------------------------------
