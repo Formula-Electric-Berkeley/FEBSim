@@ -6,11 +6,13 @@ import open_loop
 import numpy as np
 import pandas as pd
 from track import Track
-import accumulator 
+import accumulator
 
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 import lap_utils
+
+veh = vehicle.Vehicle()
 
 # predict our efficiency factor and score from the average laptime and energy drain
 def calculate_efficiency_factor(avg_laptime, energy_drain):
@@ -168,7 +170,7 @@ def autoX_sweep():
     for i, aero_package in enumerate(aero_coefficients):
         for j, power_cap in enumerate(power_caps):
             pack.reset()
-            vehicle.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
+            veh.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
 
             laptime, energy, transient_output = open_loop.simulate(pack, track)
 
@@ -262,7 +264,7 @@ def aero_sweep(numLaps, track_file, masses, aero_coefficients,
 
                     # Here is where we run individual races
                     pack.reset()
-                    vehicle.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
+                    veh.soft_reload(masses[i], power_cap, aero_package) # reload our vehicle to have the new data
 
                     laptime, energy, pack_failed, output_df = open_loop.simulate_laps(pack, numLaps, track)
 
@@ -309,7 +311,7 @@ def aero_sweep(numLaps, track_file, masses, aero_coefficients,
 
 # Estimate points for previously run outputs of endurance, autoX, and accel
 def points_from_spreadsheet():
-    numEnduranceLaps = 22
+    numEnduranceLaps = 2
 
     endurance_reference_file = "endurance_data6.xlsx"
     endurance_data = pd.io.excel.read_excel(endurance_reference_file, sheet_name=1)
@@ -396,7 +398,7 @@ def optimize_endurance(endurance_trackfile, possible_packs, power_caps, numLaps,
             pack.reset()
 
             # initialize our vehicle with the new mass and capped motor curve 
-            vehicle.soft_reload(masses[i], power_caps[j1]) # reload our vehicle to have the new data
+            veh.soft_reload(masses[i], power_caps[j1]) # reload our vehicle to have the new data
 
             # simulate endurance
             laptime, energy, pack_failure, _ = open_loop.simulate_laps(pack, numLaps, track)
@@ -608,7 +610,7 @@ def get_points():
     # Load low drag config aero for endurance
     low_drag = [-1.23, -0.93]
 
-    vehicle.soft_reload(mass, power_cap = cap, new_aero= no_aero)
+    veh.soft_reload(mass, power_cap = cap, new_aero= no_aero)
 
     autocross_time, autocross_energy, _ = open_loop.simulate(pack, track)
 
@@ -636,7 +638,7 @@ def get_points():
     cap = 20
 
     pack.reset()
-    vehicle.soft_reload(mass, power_cap = cap, new_aero= no_aero)
+    veh.soft_reload(mass, power_cap = cap, new_aero= no_aero)
     
     
 

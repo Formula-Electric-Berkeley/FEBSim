@@ -6,6 +6,7 @@ import lap_utils
 from scipy.signal import find_peaks
 from scipy.interpolate import interp1d
 import pandas as pd
+import vehicle
 
 import matplotlib.pyplot as plt
 
@@ -28,7 +29,7 @@ def simulate_mainloop(veh, tr):
         v_max[i], tps_v_max[i], bps_v_max[i] = lap_utils.vehicle_model_lat(veh, tr, i)
 
     # Finding apexes
-    apex, _ = find_peaks(-v_max) 
+    apex, _ = find_peaks(-v_max)
     
     v_apex = v_max[apex]  # Flipping to get positive values
     
@@ -178,7 +179,7 @@ def simulate_mainloop(veh, tr):
 # The old simulate is now simulate_mainloop; this method holds the additional clutter and modifications; 9/22
 def simulate(pack, tr):
     #Import track and vehicle files like OpenLap
-    import vehicle as veh
+    veh = vehicle.Vehicle()
 
     # Run our laputils functions to get first-pass solutions to the track
     V, AX, AY, TPS, BPS = simulate_mainloop(veh, tr)

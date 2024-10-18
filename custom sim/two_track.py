@@ -7,7 +7,7 @@ import casadi as ca
 import pandas as pd
 
 import track_for_bicycle as tr
-import vehicle as veh
+import vehicle
 
 import powertrain_model
 from scipy.interpolate import interp1d
@@ -60,7 +60,7 @@ The sim works without wheel speeds and it outputs reasonable data, from which yo
 
 '''
 
-def opt_mintime():
+def opt_mintime(veh):
     # ------------------------------------------------------------------------------------------------------------------
     # GET TRACK INFORMATION --------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
@@ -1005,4 +1005,4 @@ def opt_mintime():
     writer.close()
 
 
-opt_mintime()
+opt_mintime(vehicle.Vehicle())
