@@ -28,7 +28,7 @@ def fit_poly(df):
     return p
 
 # Load the data; replace the string with the correct path if the CSV files are not in the same directory
-base_name = 'battery_info\\Energus\\SonyVTC6_'
+base_name = 'battery_info/Energus/SonyVTC6_'
 
 
 # Parameters for outlier removal

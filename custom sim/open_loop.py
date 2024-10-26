@@ -6,6 +6,7 @@ import lap_utils
 from scipy.signal import find_peaks
 from scipy.interpolate import interp1d
 import pandas as pd
+import vehicle
 
 import matplotlib.pyplot as plt
 
@@ -28,14 +29,14 @@ def simulate_mainloop(veh, tr):
         v_max[i], tps_v_max[i], bps_v_max[i] = lap_utils.vehicle_model_lat(veh, tr, i)
 
     # Finding apexes
-    apex, _ = find_peaks(-v_max) 
+    apex, _ = find_peaks(-v_max)
     
     v_apex = v_max[apex]  # Flipping to get positive values
     
 
     # Setting up standing start for open track configuration
     # TODO currently unused; we just have closed tracks atm
-    if tr.info.config == 'Open':
+    if tr.config == 'Open' and False:
         if apex[0] != 0:  # If our first velocity max is not already an apex
             apex = np.insert(apex, 0, 1)  # Inject index 0 as apex
             v_apex = np.insert(v_apex, 0, 0)  # Inject standing start
@@ -82,7 +83,7 @@ def simulate_mainloop(veh, tr):
             
             # Accelerate and decelerate from apex i to every other apex (j), unless... (see *) 
 
-            if not (tr.info.config == 'Open' and mode == -1 and i == 0):  # Does not run in decel mode at standing start in open track
+            if not (tr.config == 'Open' and mode == -1 and i == 0):  # Does not run in decel mode at standing start in open track
                 
                 # Getting other apex for later checking
                 i_rest = lap_utils.other_points(i, N)
@@ -105,7 +106,7 @@ def simulate_mainloop(veh, tr):
                 _, j_next = lap_utils.next_point(j, tr.n-1, mode)
     
 
-                if not (tr.info.config == 'Open' and mode == 1 and i == 0):  # If we're not in standing start
+                if not (tr.config == 'Open' and mode == 1 and i == 0):  # If we're not in standing start
                     # Assuming the same speed right after apex; initial guess
                     v[j_next, i, k] = v[j, i, k]
 
@@ -136,11 +137,11 @@ def simulate_mainloop(veh, tr):
                     
 
                     # Checking if the lap is completed
-                    if tr.info.config == 'Closed':
+                    if tr.config == 'Closed':
                         if j == apex[i]:  # Made it to the same apex
                             counter += 1
                             break
-                    elif tr.info.config == 'Open':
+                    elif tr.config == 'Open':
                         if j == tr.n:  # Made it to the end
                             flag[j, k] = True #flag_update(flag, j, k, prg_size, logid, prg_pos)
                             break
@@ -176,16 +177,15 @@ def simulate_mainloop(veh, tr):
     return V, AX, AY, TPS, BPS
 
 # The old simulate is now simulate_mainloop; this method holds the additional clutter and modifications; 9/22
-def simulate(pack):
+def simulate(pack, tr):
     #Import track and vehicle files like OpenLap
-    import track as tr
-    import vehicle as veh
+    veh = vehicle.Vehicle()
 
     # Run our laputils functions to get first-pass solutions to the track
     V, AX, AY, TPS, BPS = simulate_mainloop(veh, tr)
 
     
-    # laptime calculation    
+    # laptime calculation
     dt = np.divide(tr.dx, V)
     time = np.cumsum(dt)
     laptime = time[-1]
@@ -377,8 +377,8 @@ def simulate(pack):
     return laptime, energy_drain, transient_output
 
 # Simulate n laps of the currently loaded track
-def simulate_laps(pack, numLaps):
-    laptime0, energistics0, output_df = simulate(pack)
+def simulate_laps(pack, numLaps, tr):
+    laptime0, energistics0, output_df = simulate(pack, tr)
 
     laptimes = [laptime0]
     energy_drains = [energistics0]              #total energy drained from the accumulator (estimate)

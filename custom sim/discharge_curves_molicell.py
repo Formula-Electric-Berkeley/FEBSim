@@ -28,7 +28,7 @@ def fit_poly(df):
     return p
 
 # Load the data
-base_name = 'battery_info\\Molicell\\'
+base_name = 'battery_info/Molicell/'
 
 
 # Replace the string with the correct path if the CSV files are not in the same directory
