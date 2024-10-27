@@ -416,6 +416,8 @@ def opt_mintime():
     alpha_rl = alpha["rear left"]
 
     sigma = slip_ratios(wfr, wfl, wrr, wrl, vlfr, vlfl, vlrr, vlrl)
+    # REMOVE THIS LINE LATER
+    sigma = {"front right": 0.0, "front left": 0.0, "rear right": 0.0, "rear left": 0.0}
     sigma_fr = sigma["front right"]
     sigma_fl = sigma["front left"]
     sigma_rr = sigma["rear right"]
