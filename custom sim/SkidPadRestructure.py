@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 # Import the Track class from track.py
 from track import Track
+from vehicle import Vehicle
 
 def pacejka_model(alpha, params):
     """
@@ -55,23 +56,26 @@ def create_motor_torque_function(motor_speed_data, torque_data):
     torque_function = interp1d(motor_speed_data, torque_data, kind='linear', fill_value="extrapolate")
     return torque_function
 
-def bicycle_model_dynamics(t, state, vehicle_params, track, torque_function):
+def bicycle_model_dynamics(t, state, vehicle, track, torque_function, outputs):
     # Unpack vehicle parameters
-    mass = vehicle_params['mass']
-    h_cg = vehicle_params['h_cg']
-    track_width = vehicle_params['track_width']
-    aero_params = vehicle_params['aero_params']
-    L_f = vehicle_params['L_f']
-    L_r = vehicle_params['L_r']
-    I_z = vehicle_params['I_z']
-    wheelbase = vehicle_params['wheelbase']
-    tire_radius = vehicle_params['tire_radius']
-    gear_ratio = vehicle_params['gear_ratio']
-    final_drive_ratio = vehicle_params['final_drive_ratio']
-    pacejka_params_for_bins = vehicle_params['pacejka_params_for_bins']
-    drivetrain_efficiency = vehicle_params['drivetrain_efficiency']
-    max_lateral_acc = vehicle_params['max_lateral_acc']
-    max_braking_g = vehicle_params['max_braking_g']
+    mass = vehicle.M
+    h_cg = vehicle.cg_height
+    track_width = vehicle.track_width_front
+    C_L = vehicle.Cl
+    C_D = vehicle.Cd
+    A = vehicle.A
+    L_f = vehicle.lf
+    L_r = vehicle.lr
+    I_z = vehicle.Iz
+    wheelbase = vehicle.L
+    tire_radius = vehicle.tyre_radius
+    gear_ratio = vehicle.gear_ratio
+    final_drive_ratio = vehicle.ratio_final
+    pacejka_params_for_bins = vehicle.pacejka_params_for_bins
+    drivetrain_efficiency = vehicle.drivetrain_efficiency
+    max_lateral_acc = vehicle.max_lateral_acc
+    max_braking_g = vehicle.max_braking_g
+    rolling_resistance_coefficient = vehicle.Cr
 
     # State contains [x, y, psi, vy, yaw_rate, v, s]
     x, y, psi, vy, yaw_rate, v, s = state
@@ -83,9 +87,6 @@ def bicycle_model_dynamics(t, state, vehicle_params, track, torque_function):
     epsilon = 1e-5
     v = max(v, epsilon)
 
-    # Aerodynamic parameters
-    C_L, C_D, A = aero_params
-
     # Aerodynamic downforce (proportional to square of speed)
     downforce = 0.5 * rho * v**2 * C_L * A
 
@@ -93,7 +94,6 @@ def bicycle_model_dynamics(t, state, vehicle_params, track, torque_function):
     drag_force = 0.5 * rho * v**2 * C_D * A
 
     # Rolling resistance
-    rolling_resistance_coefficient = 0.015  # Typical value
     rolling_resistance = rolling_resistance_coefficient * mass * g
 
     # Mass split equally for simplicity (front and rear axle)
@@ -161,7 +161,7 @@ def bicycle_model_dynamics(t, state, vehicle_params, track, torque_function):
     if np.abs(curvature) > epsilon:
         max_speed = np.sqrt(max_lateral_acc / np.abs(curvature))
     else:
-        max_speed = vehicle_params['max_speed']  # Set to a high value or vehicle's max speed
+        max_speed = vehicle.max_speed  # Set to a high value or vehicle's max speed
 
     # Determine if braking is needed
     speed_error = v - max_speed
@@ -178,6 +178,10 @@ def bicycle_model_dynamics(t, state, vehicle_params, track, torque_function):
     else:
         F_brake = 0  # No braking needed
 
+    # Store time and braking force
+    outputs['t'].append(t)
+    outputs['F_brake'].append(F_brake)
+
     # Equations of motion
     x_dot = v * np.cos(psi) - vy * np.sin(psi)
     y_dot = v * np.sin(psi) + vy * np.cos(psi)
@@ -189,11 +193,14 @@ def bicycle_model_dynamics(t, state, vehicle_params, track, torque_function):
 
     return [x_dot, y_dot, psi_dot, vy_dot, yaw_rate_dot, v_dot, s_dot]
 
-def simulate_bicycle_model_on_track(vehicle_params, track, initial_conditions, torque_function):
+def simulate_bicycle_model_on_track(vehicle, track, initial_conditions, torque_function):
     # Time vector
-    total_simulation_time = vehicle_params['total_simulation_time']
+    total_simulation_time = vehicle.sim_time
     t_span = [0, total_simulation_time]
     t_eval = np.linspace(0, total_simulation_time, 1000)  # Time steps for evaluation
+
+    # Create outputs dictionary to store time and braking force
+    outputs = {'t': [], 'F_brake': []}
 
     # Create curvature function
     track.curvature_function = interp1d(track.x, track.r, kind='linear', fill_value='extrapolate')
@@ -203,7 +210,7 @@ def simulate_bicycle_model_on_track(vehicle_params, track, initial_conditions, t
         fun=bicycle_model_dynamics,
         t_span=t_span,
         y0=initial_conditions,
-        args=(vehicle_params, track, torque_function),
+        args=(vehicle, track, torque_function, outputs),
         t_eval=t_eval,
         method='RK45',
     )
@@ -220,6 +227,10 @@ def simulate_bicycle_model_on_track(vehicle_params, track, initial_conditions, t
     # Compute total distance traveled along the path
     distance_traveled = s
 
+    # Interpolate F_brake to match t_eval
+    F_brake_interp = interp1d(outputs['t'], outputs['F_brake'], kind='linear', fill_value='extrapolate')
+    F_brake_at_t_eval = F_brake_interp(solution.t)
+
     results = pd.DataFrame({
         'Time (s)': solution.t,
         'X Position (m)': x,
@@ -228,63 +239,59 @@ def simulate_bicycle_model_on_track(vehicle_params, track, initial_conditions, t
         'Lateral Velocity (m/s)': vy,
         'Yaw Rate (rad/s)': yaw_rate,
         'Speed (m/s)': speed,
-        'Distance Traveled (m)': distance_traveled
+        'Distance Traveled (m)': distance_traveled,
+        'Braking Force (N)': F_brake_at_t_eval,
     })
 
     return results
 
-# Example usage
 if __name__ == "__main__":
-    # Predefined Pacejka parameters for different load bins
-    pacejka_params_for_bins = {
+    # Create Vehicle instance
+    vehicle = Vehicle()
+    vehicle.sim_time = 200
+    vehicle.drivetrain_efficiency = 0.95
+    vehicle.max_lateral_acc = 1.5 * 9.81
+    vehicle.max_braking_g = 1.0
+    vehicle.max_speed = 60
+    vehicle.pacejka_params_for_bins = {
         (0, 4000): {'B': 10, 'C': 1.9, 'D': 1.0, 'E': 0.97, 'Sv': 0},
-    }
-
-    # Vehicle parameters
-    vehicle_params = {
-        'mass': 245,  # kg
-        'h_cg': 0.25,  # meters
-        'track_width': 1.05,  # meters
-        'wheelbase': 1.55,  # meters
-        'L_f': 1.55 / 2,  # Distance from CG to front axle
-        'L_r': 1.55 / 2,  # Distance from CG to rear axle
-        'I_z': 150,  # kg*m^2
-        'aero_params': [2.06, 1.12, 1.0],  # C_L, C_D, A (example values)
-        'pacejka_params_for_bins': pacejka_params_for_bins,
-        'tire_radius': 0.2286,  # 18 inches in meters
-        'gear_ratio': 1.0,  # For EV with direct drive
-        'final_drive_ratio': 1.0,  # For EV with direct drive
-        'drivetrain_efficiency': 0.95,  # 95% efficiency
-        'max_lateral_acc': 1.5 * 9.81,  # Maximum lateral acceleration (1.5g)
-        'max_braking_g': 1.0,  # Maximum braking deceleration (1g)
-        'max_speed': 60,  # Maximum speed in m/s
-        'total_simulation_time': 200,  # Total simulation time in seconds
     }
 
     # Load track data
     track = Track('Michigan_2022_AutoX.xlsx')
 
-    # Motor torque data for EV (example data)
-    motor_speed_data = np.array([0, 2000, 4000, 6000, 8000, 10000])  # rpm
-    torque_data = np.array([250, 250, 250, 200, 150, 100])  # Nm
+    # Motor torque data from Vehicle instance
+    motor_speed_data = vehicle.motor_speeds
+    torque_data = vehicle.motor_torques
 
     # Create motor torque function
     torque_function = create_motor_torque_function(motor_speed_data, torque_data)
 
-    # Initial conditions: [x, y, psi, vy, yaw_rate, v, s]
-    initial_speed = 0.1  # m/s to avoid division by zero
-    initial_conditions = [0, 0, 0, 0, 0, initial_speed, 0]  # Start from rest at s=0
+    # Initial conditions
+    initial_speed = 0.1  # m/s
+    initial_conditions = [0, 0, 0, 0, 0, initial_speed, 0]
 
     # Run the simulation
     results_df = simulate_bicycle_model_on_track(
-        vehicle_params, track, initial_conditions, torque_function
+        vehicle, track, initial_conditions, torque_function
     )
 
+    # Plotting Velocity Over Time
     plt.figure(figsize=(10, 5))
     plt.plot(results_df['Time (s)'], results_df['Speed (m/s)'], label='Vehicle Speed')
     plt.xlabel('Time (s)')
     plt.ylabel('Speed (m/s)')
     plt.title('Vehicle Speed Over Time')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    # Plotting Braking Force Over Time
+    plt.figure(figsize=(10, 5))
+    plt.plot(results_df['Time (s)'], results_df['Braking Force (N)'], label='Braking Force', color='red')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Braking Force (N)')
+    plt.title('Braking Force Over Time')
     plt.legend()
     plt.grid(True)
     plt.show()
