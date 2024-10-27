@@ -1,7 +1,10 @@
+import math
+
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.interpolate import pchip_interpolate
+from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
 
 base_name = 'track_files/'
@@ -10,92 +13,63 @@ class Track():
     def __init__(self, trackfile, grip = 0):
         self.filename = base_name + trackfile
         self.grip = grip
-        self.read_info('Shape')
-        self.read_config()
-        self.load_stats()
+        self.info = self.read_info('Shape')
+        self.config = self.read_config()
+
+        self.r = self.info["Corner Radius"]
+        self.x = self.info["Length"]
+        
+        self.r_mesh, self.x_tot_mesh, self.track_length = self.load_stats()
+        
+        self.n_sections = len(self.r)
+        self.n_mesh = len(self.r_mesh)
+
+        # Create a curvature function, note that this takes in the DISTANCE TRAVELLED THUS FAR, not just an index.
+        # Super weird error, checkout (https://stackoverflow.com/questions/49459985/numpy-reciprocal-returns-different-values-when-called-repeatedly)
+        curvature = np.zeros(len(self.x_tot_mesh))
+        np.reciprocal(self.r_mesh, where=self.r_mesh > 0.0001, out=curvature)
+        self.curvature_function = interp1d(self.x_tot_mesh, curvature, kind='linear', fill_value='extrapolate')
 
     def read_info(self, sheet_name=1, start_row=2, end_row=10000, cols="A:C"):
-        self.info = pd.io.excel.read_excel(self.filename, sheet_name, header=None, skiprows=start_row-1, nrows=end_row-start_row+1, usecols=cols)
-        self.info.columns = ["Type", "Length", "Corner Radius"]
+        info = pd.io.excel.read_excel(self.filename, sheet_name, header=None, skiprows=start_row-1, nrows=end_row-start_row+1, usecols=cols)
+        info.columns = ["Type", "Length", "Corner Radius"]
+
+        return info
 
     def read_config(self, sheet_name = "Info"):
-        self.config = pd.io.excel.read_excel(self.filename, sheet_name)
-        columns = self.config.columns.tolist()
-        self.config = self.config.loc[self.config[columns[0]] == 'Configuration',columns[1]].item()
+        config = pd.io.excel.read_excel(self.filename, sheet_name)
+        columns = config.columns.tolist()
+        config = config.loc[config[columns[0]] == 'Configuration',columns[1]].item()
+
+        return config
 
     def load_stats(self):
         mesh_size = 0.25
+        total_len = sum(self.info["Length"])
+        mesh_count = int(total_len // mesh_size) # why the fuck doesn't floor div give an int
 
-        #Getting Curvature
-        R = self.info.loc[:, "Corner Radius"] #0 or NaN on straights, otherwise a float
-        R = np.nan_to_num(R)
-        R = R.astype(float)
-        R[R==0] = np.inf
-        self.n = len(R)
+        x_tot = np.cumsum(self.info["Length"])
+        
+        r_mesh = np.zeros(mesh_count)
+        x_tot_mesh = np.zeros(mesh_count)
 
-        #Getting type
-        type_tmp = self.info.loc[:, "Type"]
-        segment_type = np.zeros(self.n)
-        segment_type[type_tmp == "Straight"] = 0
-        segment_type[type_tmp == "Left"] = 1
-        segment_type[type_tmp == "Right"] = -1
-
-        #Getting Position Data
-        l = self.info.loc[:, "Length"]
-        L = np.sum(l) #total length
-        X = np.cumsum(l)  # end position of each segment
-        XC = np.cumsum(l) - l / 2  # center position of each segment
-
-
-        # Coarse Track Meshing
-        j = 0  # index
-        self.x = np.zeros(len(X) + np.sum(R==np.inf))   # preallocation
-        self.r = np.zeros(len(X) + np.sum(R==np.inf))
-
-        for i in range(len(X)): 
-            if R[i] == np.inf:  # end of straight point injection
-                self.x[j] = X[i] - l[i]
-                self.x[j + 1] = X[i]
-                j += 2
-            else:  # circular segment 
-                self.x[j] = XC[i]
-                self.r[j] = segment_type[i] / R[i]
-                j += 1
-
-
-
-        # saving coarse results; these are the values we interpolate to get a mesh
-        unique_indices = np.unique(self.x, return_index=True)[1]
-        xx = self.x[unique_indices]
-        rr = self.r[unique_indices]
-
-
-        # New fine position vector; this is where we mesh the track
-        if np.floor(L) < L:  # check for injecting last point
-            self.x = np.concatenate([np.arange(0, np.floor(L), mesh_size), [L]])
-        else:
-            self.x = np.arange(0, np.floor(L), mesh_size)
-
-        # Distance step vector
-        self.dx = np.diff(self.x)
-        self.dx = np.concatenate([self.dx, [self.dx[-1]]])
-
-        # Number of mesh points
-        self.n = len(self.x)
-
-        # Fine curvature vector; interpolation of unique radii at all unique positions
-        self.r = pchip_interpolate(xx, rr, self.x)
-
-        # Fine turn direction vector
-        t = np.sign(self.r)
-
-        if self.grip == 0:
-            self.factor_grip = np.ones(self.n)
-        else:
-            self.factor_grip = np.ones(self.n) * self.grip
+        i = 0 # two pointer thing
+        for m in range(mesh_count):
+            xt = mesh_size * m
+            while xt > x_tot[i]:
+                i += 1
             
-        self.bank = np.zeros(self.n)
-        self.incl = np.zeros(self.n)
+            r = self.info["Corner Radius"][i]
+
+            r_mesh[m] = r
+            x_tot_mesh[m] = xt
+        
+        return r_mesh, x_tot_mesh, total_len
+    
+    def plot_curvature(self):
+        plt.scatter(self.x_tot_mesh, self.curvature_function(self.x_tot_mesh))
+        # plt.ylim(0, 1)
+        plt.show()
 
 
 def plot_track(s, kappa):
@@ -124,4 +98,12 @@ def plot_track(s, kappa):
     plt.grid(True)
     plt.show()
 
-#plot_track(x, r)
+t = Track("Michigan_2022_AutoX.xlsx")
+
+# print(min(r for r in t.r_mesh if r != 0))
+# print(max(np.reciprocal(t.r_mesh, where=t.r_mesh != 0)))
+# print(list(t.r_mesh))
+
+# t.plot_curvature()
+# plt.plot(t.x_tot_mesh, t.r_mesh)
+# plt.show()
