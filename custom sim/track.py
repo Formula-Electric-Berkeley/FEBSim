@@ -1,4 +1,5 @@
 import math
+from collections import defaultdict
 
 import pandas as pd
 import numpy as np
@@ -19,16 +20,13 @@ class Track():
         self.r = self.info["Corner Radius"]
         self.x = self.info["Length"]
         
-        self.r_mesh, self.x_tot_mesh, self.track_length = self.load_stats()
+        self.r_mesh, self.c_mesh, self.x_tot_mesh, self.track_length, self.apexes= self.load_stats()
+        
         
         self.n_sections = len(self.r)
         self.n_mesh = len(self.r_mesh)
 
-        # Create a curvature function, note that this takes in the DISTANCE TRAVELLED THUS FAR, not just an index.
-        # Super weird error, checkout (https://stackoverflow.com/questions/49459985/numpy-reciprocal-returns-different-values-when-called-repeatedly)
-        curvature = np.zeros(len(self.x_tot_mesh))
-        np.reciprocal(self.r_mesh, where=self.r_mesh > 0.0001, out=curvature)
-        self.curvature_function = interp1d(self.x_tot_mesh, curvature, kind='linear', fill_value='extrapolate')
+        self.curvature_function = interp1d(self.x_tot_mesh, self.c_mesh, kind='linear', fill_value='extrapolate')
 
     def read_info(self, sheet_name=1, start_row=2, end_row=10000, cols="A:C"):
         info = pd.io.excel.read_excel(self.filename, sheet_name, header=None, skiprows=start_row-1, nrows=end_row-start_row+1, usecols=cols)
@@ -54,22 +52,60 @@ class Track():
         x_tot_mesh = np.zeros(mesh_count)
 
         i = 0 # two pointer thing
+        mesh_points_for_turns = defaultdict(list)
+
         for m in range(mesh_count):
             xt = mesh_size * m
             while xt > x_tot[i]:
                 i += 1
-            
+
+            mesh_points_for_turns[i].append(m)
             r = self.info["Corner Radius"][i]
 
             r_mesh[m] = r
             x_tot_mesh[m] = xt
         
-        return r_mesh, x_tot_mesh, total_len
+
+        # Super weird implementation due to weird error, checkout (https://stackoverflow.com/questions/49459985/numpy-reciprocal-returns-different-values-when-called-repeatedly)
+        c_mesh = np.zeros(len(x_tot_mesh))
+        np.reciprocal(r_mesh, where=r_mesh > 0.0001, out=c_mesh)
+
+        apexes = []
+        for t in mesh_points_for_turns:
+            mps = mesh_points_for_turns[t]
+            if c_mesh[mps[0]] == 0:
+                continue
+                
+            apexes.append(mps[len(mps) // 2])
+        
+        return r_mesh, c_mesh, x_tot_mesh, total_len, apexes
     
     def plot_curvature(self):
         plt.scatter(self.x_tot_mesh, self.curvature_function(self.x_tot_mesh))
         # plt.ylim(0, 1)
         plt.show()
+
+    def find_apexes(self): 
+        turns = []
+
+        in_turn = False
+
+        if self.c_mesh[0] != 0:
+            turns.append(0)
+            in_turn = True
+
+        for i in range(self.n_mesh):
+            if self.c_mesh[i] != 0 and not in_turn:
+                turns.append(i)
+                in_turn = True
+            if self.c_mesh[i] == 0 and in_turn:
+                turns.append(i)
+                in_turn = False
+        
+        if self.c_mesh[-1] != 0:
+            turns.append(self.n_mesh)
+
+        return turns 
 
 
 def plot_track(s, kappa):
