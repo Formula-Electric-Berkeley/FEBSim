@@ -12,7 +12,7 @@ from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 import lap_utils
 
-veh = vehicle.Vehicle()
+veh = vehicle.Vehicle ()
 
 # predict our efficiency factor and score from the average laptime and energy drain
 def calculate_efficiency_factor(avg_laptime, energy_drain):
@@ -311,7 +311,7 @@ def aero_sweep(numLaps, track_file, masses, aero_coefficients,
 
 # Estimate points for previously run outputs of endurance, autoX, and accel
 def points_from_spreadsheet():
-    numEnduranceLaps = 2
+    numEnduranceLaps = 22
 
     endurance_reference_file = "endurance_data6.xlsx"
     endurance_data = pd.io.excel.read_excel(endurance_reference_file, sheet_name=1)
@@ -671,7 +671,7 @@ def sweep_wrapper():
 
     # General / physical information
     base_mass = 215.0                   # kg
-    driver_masses = range(0, 150, 5)
+    driver_masses = [85] # range(0, 150, 5)
     masses = []
     for driver_mass in driver_masses:
         masses.append(base_mass + driver_mass)

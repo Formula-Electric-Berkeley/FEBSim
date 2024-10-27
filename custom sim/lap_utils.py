@@ -47,7 +47,7 @@ def next_point(j, j_max, mode, tr_config='Closed'):
 # Rudimentary implementation of load sensitivity
 # Prior to slip angles => Add these this weekend
 def load_sensitivity(vertical_load):
-    
+    return vertical_load
     # Fit coefficients
     max_load = 4500                     # 4500, 1.8, 0.5; use Desmos
     load_sensitivity = 1.8              

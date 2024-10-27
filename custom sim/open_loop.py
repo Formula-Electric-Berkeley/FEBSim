@@ -33,7 +33,6 @@ def simulate_mainloop(veh, tr):
     
     v_apex = v_max[apex]  # Flipping to get positive values
     
-
     # Setting up standing start for open track configuration
     # TODO currently unused; we just have closed tracks atm
     if tr.config == 'Open' and False:
