@@ -19,4 +19,4 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Command to run the application
-CMD ["python", "main.py"]
+CMD python open_loop.py && python wait.py

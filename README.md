@@ -1,4 +1,4 @@
-# Lap Sim
+# FEBSim Docker Setup Instructions
 
 ## Overview
 --
@@ -6,16 +6,12 @@
 ## Requirements
 `requirements.txt`
 
-## How to Build and Run
---
+## Build the Docker Image
+`docker build -t feb-sim-docker .`
 
 
-# Build the Docker image - CHANGE DIRECTORY TO WHERE DOCKER FILE IS, for now its Lap Sim
-docker build -t molicell-tester .
-
-
-# Run the Docker container
-docker run --rm -v "$(pwd)":/app molicell-tester
+## Run the Docker container
+`docker run --rm -v "$(pwd)":/app feb-sim-docker`
 
 
 

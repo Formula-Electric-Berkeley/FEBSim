@@ -6,7 +6,7 @@ import accumulator
 def main():
     molicell.plot()  # Call the function that generates the plot
     energus.plot()
-    open_loop.simulate(accumulator.Pack())
+    # open_loop.simulate(accumulator.Pack())
     
 
 if __name__ == "__main__":
