@@ -110,4 +110,4 @@ def return_polynomials():
     
 plot()
 
-plt.savefig('energus_plot.png')
+plt.savefig('outputs/energus_plot.png')

@@ -131,7 +131,7 @@ class motor():
     def motor_efficiency(motor_speed, motor_torque):
         colors = ['red', 'orange', 'green', 'blue', 'violet']
 
-        base_name = 'motor_curves\\'
+        base_name = 'motor_curves/'
 
         labels = [86, 90, 94, 95, 96]
         datasets = []

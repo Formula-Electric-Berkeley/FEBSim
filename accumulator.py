@@ -12,8 +12,8 @@ The program displays the stats for the pack with input configuration, and gives 
 
 The bottom of the file has a function that runs through combinations of configuration with a given range and outputs valid configurations that didnt raise a warning.
 """
-import molicell
-import energus
+import discharge_curves_molicell
+import discharge_curves_energus
 from scipy.interpolate import interp1d
 
 class Cell_21700:

@@ -19,4 +19,4 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Command to run the application
-CMD python open_loop.py
+CMD python ethan_all.py
