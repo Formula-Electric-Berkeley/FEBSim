@@ -18,5 +18,8 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update && apt-get install -y coinor-libipopt-dev
+
+
 # Command to run the application
-CMD python ethan_all.py
+CMD python two_track.py
