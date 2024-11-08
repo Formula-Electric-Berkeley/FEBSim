@@ -12,8 +12,8 @@ The program displays the stats for the pack with input configuration, and gives 
 
 The bottom of the file has a function that runs through combinations of configuration with a given range and outputs valid configurations that didnt raise a warning.
 """
-import discharge_curves_molicell
-import discharge_curves_energus
+import molicell
+import energus
 from scipy.interpolate import interp1d
 
 class Cell_21700:
@@ -90,7 +90,7 @@ class Pack(Cell_21700):
 
         # what is the total charge *removed* from the accumulator? in Wh       
         self.cell_data["discharge"] = 0
-        self.discharge_polynomials = discharge_curves_molicell.return_polynomials()
+        self.discharge_polynomials = molicell.return_polynomials()
 
         self.drain_error = False # have we over-drained this pack?
         self.breaker_popped = False # did we exceed our current max?
