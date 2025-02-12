@@ -336,7 +336,7 @@ Ethan's changelog: 9/22
 The sim works without wheel speeds and it outputs reasonable data, from which you can reconstruct track geometry
 '''
 
-def opt_mintime():
+def opt_mintime(cd):
 
     N, mesh_point_separations, kappa_interp = track_info()
 
@@ -416,7 +416,7 @@ def opt_mintime():
     alpha_rl = alpha["rear left"]
 
     sigma = slip_ratios(wfr, wfl, wrr, wrl, vlfr, vlfl, vlrr, vlrl)
-    # REMOVE THIS LINE LATER
+    # REMOVE THIS LINE LATER: using slip ratios of 0
     sigma = {"front right": 0.0, "front left": 0.0, "rear right": 0.0, "rear left": 0.0}
     sigma_fr = sigma["front right"]
     sigma_fl = sigma["front left"]
@@ -439,9 +439,13 @@ def opt_mintime():
     Fy_rl = body_F["rear left y"]
 
     # drag forces
+    # Fx_aero = (
+    #     -veh.drag_coeff * vx * ca.fabs(vx)
+    # )  # TODO add rolling resistance here later
+    
     Fx_aero = (
-        -veh.drag_coeff * vx * ca.fabs(vx)
-    )  # TODO add rolling resistance here later
+        cd * vx * ca.fabs(vx)
+    ) 
 
     # compute the net force and torque on the vehicle
     Fx = (
@@ -543,8 +547,11 @@ def opt_mintime():
         / x_s
     )
 
-
     print("Dynamics Defined")
+    
+    return delta_s, torque_drive_s, f_brake_s, v_s, beta_s, omega_z_s, n_s, wheel_scale, mesh_point_separations, kappa, kappa_interp, gamma_x_s, gamma_y_s, x, xi_s, x_s, dx, nx, u, u_s, sf, tau, nu, N, B, C, D, d, body_F
+    
+def nlp_solver(cd):
     # ------------------------------------------------------------------------------------------------------------------
     # CONTROL BOUNDARIES -----------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
@@ -555,6 +562,16 @@ def opt_mintime():
     Making sure these boundaries are physical (not too broad, not too narrow) is *crucial* for accurate convergence 
     Because we give CasADi normalized vectors, we must normalize these bounds by dividing by each variable's scale x_s
     """
+    delta_s, torque_drive_s, f_brake_s, v_s, beta_s, omega_z_s, n_s, wheel_scale, mesh_point_separations, kappa, kappa_interp, gamma_x_s, gamma_y_s, x, xi_s, x_s, dx, nx, u, u_s, sf, tau, nu, N, B, C, D, d, body_F = opt_mintime(cd)
+    
+    Fx_fr = body_F["front right x"]
+    Fy_fr = body_F["front right y"]
+    Fx_fl = body_F["front left x"]
+    Fy_fl = body_F["front left y"]
+    Fx_rr = body_F["rear right x"]
+    Fy_rr = body_F["rear right y"]
+    Fx_rl = body_F["rear left x"]   
+    Fy_rl = body_F["rear left y"]
 
     delta_min = -veh.delta_max / delta_s  # min. steer angle [rad]
     delta_max = veh.delta_max / delta_s  # max. steer angle [rad]
@@ -1084,6 +1101,7 @@ def opt_mintime():
     t_opt = np.hstack((0.0, np.cumsum(dt_opt)))
 
     print("Optimal laptime is: ", t_opt)
+    
 
     # Convert numpy arrays to pandas DataFrames
     t_opt = np.reshape(t_opt, (-1, 1))  # make t_opt a vertical vector
@@ -1124,6 +1142,19 @@ def opt_mintime():
 
     # Close the Pandas Excel writer and output the excel file
     writer.close()
+    
+    return t_opt
 
-
-opt_mintime()
+bottom = -veh.drag_coeff - 0.5
+top = bottom + 1
+step = bottom
+times = {}
+while (step < top):
+    times[step] = nlp_solver(step)[-1][0]
+    step += 0.1
+    
+print(times)
+print("drag coefficients:", list(times.keys()))
+print("times:", list(times.values()))
+    
+    

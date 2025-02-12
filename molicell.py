@@ -104,4 +104,4 @@ def return_polynomials():
 plot()
 
 # After plotting
-plt.savefig('outputs/molicell_plot.png')
+# plt.savefig('outputs/molicell_plot.png')

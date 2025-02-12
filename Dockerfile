@@ -22,4 +22,4 @@ RUN apt-get update && apt-get install -y coinor-libipopt-dev
 
 
 # Command to run the application
-CMD python open_loop.py
+CMD python two_track.py
