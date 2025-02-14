@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 
 # import our accumulator and motor models
 import accumulator
-import powertrain_model
-motor = powertrain_model.motor()
+import powertrain
+motor = powertrain.motor()
     
 
 # v_max is the electronically imposed maximum velocity; set to 999 by default

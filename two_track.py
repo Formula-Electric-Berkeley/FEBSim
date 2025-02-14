@@ -9,7 +9,7 @@ import pandas as pd
 import track_for_bicycle as tr
 import vehicle as veh
 
-import powertrain_model
+import powertrain
 from scipy.interpolate import interp1d
 
 
@@ -17,8 +17,8 @@ from scipy.interpolate import interp1d
 g = 9.81  # [m/s^2]
 
 # INSTANTIATE POWERTRAIN
-motor = powertrain_model.motor()
-diff = powertrain_model.drexler_differential()
+motor = powertrain.motor()
+diff = powertrain.drexler_differential()
 
 # DEFINE TIRE CONSTANTS
 mu = 0.75  # coefficient of friction for tires
