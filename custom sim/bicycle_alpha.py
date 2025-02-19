@@ -47,14 +47,84 @@ def combined_slip_forces(s, a, Fn):
     return Fx, Fy
 
 
+def save_output(data, filename, directory='sims_logs/', metadata=None):
+    # Ensure the directory exists
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    # Define the file path
+    file_path = os.path.join(directory, filename)
+    
+    # Check if the file exists, and if so, increment the number in the filename
+    base_name, extension = os.path.splitext(filename)
+    counter = 1
+    
+    while os.path.exists(file_path):
+        # Increment the counter and update the filename
+        new_filename = f"{base_name}_{counter}{extension}"
+        file_path = os.path.join(directory, new_filename)
+        counter += 1
+    
+
+    # Write the dataframe to a excel sheet
+    with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:
+        data.to_excel(file_path, sheet_name="data", index=False)
+        if metadata is not None:
+            metadata.to_excel(file_path, sheet_name="metadata", index=False)
+
 
 class Vehicle:
-    def __init__(self):
+    def __init__(self, **kwargs):
         # Initialize the vehicle with 30kW SN3 and allow for altered parameters
-        self = veh
-        
-        self.params = {"M": veh.M, "lf": veh.lf, "lr": veh.lr, "wf": veh.wf, "wr": veh.wr, "Je": veh.Je, "Jw" : veh.Jw, "re": veh.re, "rb": veh.rb, "Iz": veh.Iz, "air_density": veh.rho, "frontal_area": veh.A, "max_velocity": veh.max_velocity, "brake_fr": veh.brake_fr, "brake_fl": veh.brake_fl, "brake_rr": veh.brake_rr, "brake_rl": veh.brake_rl, "gear_ratio": veh.gear_ratio, "ratio_final": veh.ratio_final, "delta_max": veh.delta_max, "drive_max": veh.drive_max, "brake_max": veh.brake_max, "cg_height": veh.cg_height}
+        self.params = {"M": veh.M, "lf": veh.lf, "lr": veh.lr, "wf": veh.wf, "wr": veh.wr, 
+                        "Je": veh.Je, "Jw" : veh.Jw, "re": veh.re, "rb": veh.rb, "Iz": veh.Iz, "air_density": veh.rho, 
+                        "A": veh.A, "max_velocity": veh.max_velocity, "brake_fr": veh.brake_fr, "brake_fl": veh.brake_fl, 
+                        "brake_rr": veh.brake_rr, "brake_rl": veh.brake_rl, "gear_ratio": veh.gear_ratio, "ratio_final": veh.ratio_final, 
+                        "delta_max": veh.delta_max, "drive_max": veh.drive_max, "brake_max": veh.brake_max, "cg_height": veh.cg_height, "rho": veh.rho, 
+                        "Cl": veh.Cl, "Cd": veh.Cd}
     
+        # Allow parameter overrides
+        self.params.update(kwargs)
+
+
+    # Dynamically update vehicle params
+    def update_params(self, **kwargs):
+        for key, value in kwargs.items():
+            if key in self.params:
+                self.params[key] = value
+            else:
+                print(f"Warning: {key} is not a recognized parameter.")
+
+    
+    def sweep_parameters(self, param_ranges):
+        """
+        Sweep over multiple parameter combinations.
+        
+        param_ranges: dict
+            Dictionary where keys are parameter names and values are lists of values to test.
+        
+        Returns:
+            List of vehicle instances with different parameter sets.
+        """
+        keys = list(param_ranges.keys())
+        values_list = list(param_ranges.values())
+
+        # Generate all combinations of parameter values manually
+        def generate_combinations(index=0, current_params={}):
+            if index == len(keys):
+                new_vehicle = Vehicle(**current_params)
+                vehicles.append(new_vehicle)
+                return
+            
+            key = keys[index]
+            for value in values_list[index]:
+                current_params[key] = value
+                generate_combinations(index + 1, current_params.copy())
+
+        vehicles = []
+        generate_combinations()
+        return vehicles
+
 
 class BicycleModel:
     def __init__(self, track_file, mesh_size, track_parts):
@@ -65,14 +135,17 @@ class BicycleModel:
 
     def initialize_track(self, trackfile, mesh_size, parts):
         self.tr = Track(trackfile, mesh_size)
-
+        print("Initialized track {}".format(trackfile))
         # Break the track into parts splines of curvature
         self.parts = self.tr.split(parts)
 
-    def initialize_vehicle(self, veh):
+    def initialize_vehicle(self):
         self.motor = powertrain_model.motor()
         self.diff = powertrain_model.drexler_differential()
+        self.veh = Vehicle().params
 
+    def update_vehicle(self, veh):
+        self.veh = veh.params
 
     def run(self):
         dfs = []
@@ -82,7 +155,7 @@ class BicycleModel:
 
         combined_df = pd.concat(dfs, axis=0, ignore_index=True)
 
-        self.save_output(combined_df, 'combined_output.xlsx')
+        save_output(combined_df, 'combined_output.xlsx')
 
         laptime = sum(df["time"].iloc[-1] for df in dfs if not df.empty)
 
@@ -92,30 +165,6 @@ class BicycleModel:
 
         return laptime, energy
 
-        
-
-
-    def save_output(self, data, filename, directory='sims_logs/'):
-        # Ensure the directory exists
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        
-        # Define the file path
-        file_path = os.path.join(directory, filename)
-        
-        # Check if the file exists, and if so, increment the number in the filename
-        base_name, extension = os.path.splitext(filename)
-        counter = 1
-        
-        while os.path.exists(file_path):
-            # Increment the counter and update the filename
-            new_filename = f"{base_name}_{counter}{extension}"
-            file_path = os.path.join(directory, new_filename)
-            counter += 1
-        
-
-        # Write the dataframe to a excel sheet
-        data.to_excel(file_path, sheet_name="Sheet1", index=False)
 
     def opt_mintime(self, curvatures, mesh_size):
         # ------------------------------------------------------------------------------------------------------------------
@@ -301,24 +350,24 @@ class BicycleModel:
 
         # define physical constants and vehicle parameters; pass these in in the future
         g = 9.81  # [m/s^2]
-        mass = veh.M    # [kg]
-        lf = veh.lf     # front wheelbase length (from COM to front axle)
-        lr = veh.lr     # rear  wheelbase length
+        mass = self.veh["M"]    # [kg]
+        lf = self.veh["lf"]     # front wheelbase length (from COM to front axle)
+        lr = self.veh["lr"]     # rear  wheelbase length
         L = lf + lr     # total wheelbase length
-        wf = veh.wf     # front axle width (distance between centers of wheels)
-        wr = veh.wr     # rear axle width
+        wf = self.veh["wf"]     # front axle width (distance between centers of wheels)
+        wr = self.veh["wr"]     # rear axle width
 
-        Je = veh.Je     # engine moment of inertia TODO -> modify with real data
-        Jw = veh.Jw     # wheel moment of inertia
-        re = veh.re     # effective wheel radius
-        rb = veh.rb     # effective brake radius
-        Iz = veh.Iz     # vehicle moment of inertia about z axis
+        Je = self.veh["Je"]     # engine moment of inertia TODO -> modify with real data
+        Jw = self.veh["Jw"]     # wheel moment of inertia
+        re = self.veh["re"]     # effective wheel radius
+        rb = self.veh["rb"]     # effective brake radius
+        Iz = self.veh["Iz"]     # vehicle moment of inertia about z axis
 
         # Aero stuff
-        air_density = veh.rho
-        frontal_area = veh.A
-        Cl = veh.Cl      # NEGATIVE Cl means downforce
-        Cd = veh.Cd      # negative Cd means drag
+        air_density = self.veh["rho"]
+        frontal_area = self.veh["A"]
+        Cl = self.veh["Cl"]      # NEGATIVE Cl means downforce
+        Cd = self.veh["Cd"]      # negative Cd means drag
 
         drag_coeff = 0.5*air_density*Cl*frontal_area
         df_coeff = - 0.5*air_density*Cd*frontal_area    # "Positive force" = down
@@ -432,10 +481,10 @@ class BicycleModel:
         )  # net torque about z axis
 
         # distribute commanded brake force to the wheels based on our vehicle's brake force distribution
-        F_brake_fr = veh.brake_fr * f_brake  # brake force of front right wheel
-        F_brake_fl = veh.brake_fl * f_brake
-        F_brake_rl = veh.brake_rl * f_brake
-        F_brake_rr = veh.brake_rr * f_brake
+        F_brake_fr = self.veh["brake_fr"] * f_brake  # brake force of front right wheel
+        F_brake_fl = self.veh["brake_fl"] * f_brake
+        F_brake_rl = self.veh["brake_rl"] * f_brake
+        F_brake_rr = self.veh["brake_rr"] * f_brake
 
         # calculate the effective torque experienced by each wheel due to braking
         # this partly determines the rate of change of the angular velocity of each wheel, which in turn is used to compute the slip ratio
@@ -496,12 +545,12 @@ class BicycleModel:
         wrr_dot = (
             sf
             * (-Flrr * re + torque_brake_rr + torque_drive / 2)
-            / (Jw + Je * veh.ratio_final / 2)
+            / (Jw + Je * self.veh["ratio_final"] / 2)
         )  # gear ratio
         wrl_dot = (
             sf
             * (-Flrl * re + torque_brake_rl + torque_drive / 2)
-            / (Jw + Je * veh.ratio_final / 2)
+            / (Jw + Je * self.veh["ratio_final"] / 2)
         )
 
         # If wrr_dot and wrl_dot are positive, we're accelerating. Otherwise, we're decelerating
@@ -529,14 +578,14 @@ class BicycleModel:
         Because we give CasADi normalized vectors, we must normalize these bounds by dividing by each variable's scale x_s
         """
 
-        delta_min = -veh.delta_max / delta_s  # min. steer angle [rad]
-        delta_max = veh.delta_max / delta_s  # max. steer angle [rad]
+        delta_min = -self.veh["delta_max"] / delta_s  # min. steer angle [rad]
+        delta_max = self.veh["delta_max"] / delta_s  # max. steer angle [rad]
 
         f_drive_min = 0.0  # min. longitudinal drive TORQUE [Nm]
-        f_drive_max = veh.drive_max / torque_drive_s  # max. longitudinal drive torque [Nm]
+        f_drive_max = self.veh["drive_max"] / torque_drive_s  # max. longitudinal drive torque [Nm]
 
         # the value of our brake force is always negative
-        f_brake_min = -veh.brake_max / f_brake_s  # min. longitudinal brake force [N]
+        f_brake_min = -self.veh["brake_max"] / f_brake_s  # min. longitudinal brake force [N]
         f_brake_max = 0.0  # max. longitudinal brake force [N]
 
         # The load transfer forces are unbounded; later we constrain them by enforcing no roll / pitch
@@ -551,7 +600,7 @@ class BicycleModel:
         # ------------------------------------------------------------------------------------------------------------------
 
         v_min = 0.0 / v_s  # min. velocity [m/s]
-        v_max = veh.max_velocity / v_s  # max. velocity [m/s]
+        v_max = self.veh["max_velocity"] / v_s  # max. velocity [m/s]
 
         beta_min = -0.25 * np.pi / beta_s  # min. side slip angle [rad]
         beta_max = 0.25 * np.pi / beta_s  # max. side slip angle [rad]
@@ -573,7 +622,7 @@ class BicycleModel:
 
         # for simplicitly, wheels cannot spin backwards, and we cannot have slip ratios > 1
         wheelspeed_min = 0.0
-        wheelspeed_max = 2 * veh.max_velocity / veh.re / wheel_scale
+        wheelspeed_max = 2 * self.veh["max_velocity"] / self.veh["re"] / wheel_scale
 
         # ------------------------------------------------------------------------------------------------------------------
         # INITIAL GUESS FOR DECISION VARIABLES -----------------------------------------------------------------------------
@@ -668,10 +717,10 @@ class BicycleModel:
                 0.0,
                 0.0,
                 0.0,
-                v_max / veh.re,
-                v_max / veh.re,
-                v_max / veh.re,
-                v_max / veh.re,
+                v_max / self.veh["re"],
+                v_max / self.veh["re"],
+                v_max / self.veh["re"],
+                v_max / self.veh["re"],
             ]
         )
         x_opt.append(Xk * x_s)
@@ -700,10 +749,10 @@ class BicycleModel:
                         0.0,
                         0.0,
                         0.0,
-                        vx_guess / veh.re,
-                        vx_guess / veh.re,
-                        vx_guess / veh.re,
-                        vx_guess / veh.re,
+                        vx_guess / self.veh["re"],
+                        vx_guess / self.veh["re"],
+                        vx_guess / self.veh["re"],
+                        vx_guess / self.veh["re"],
                     ]
                 )
 
@@ -741,7 +790,7 @@ class BicycleModel:
 
             # calculate time step and used energy
             dt_opt.append(sf_opt[0] + sf_opt[1] + sf_opt[2])
-            motor_speed = (Xk[7] + Xk[8]) / (2*veh.gear_ratio)
+            motor_speed = (Xk[7] + Xk[8]) / (2*self.veh["gear_ratio"])
             ec_opt.append(motor_speed * wheel_scale * Uk[1] * torque_drive_s * dt_opt[-1])
 
 
@@ -781,10 +830,10 @@ class BicycleModel:
                     0.0,
                     0.0,
                     0.0,
-                    vx_guess / veh.re,
-                    vx_guess / veh.re,
-                    vx_guess / veh.re,
-                    vx_guess / veh.re,
+                    vx_guess / self.veh["re"],
+                    vx_guess / self.veh["re"],
+                    vx_guess / self.veh["re"],
+                    vx_guess / self.veh["re"],
                 ]
             )
 
@@ -810,12 +859,12 @@ class BicycleModel:
             # path constraint: longitudinal wheel load transfer assuming Ky = 0 (no pitch)
             roll_relaxation = 1e-7
             pitch_relaxation = 1e-7
-            g.append(Uk[3] * gamma_x_s * (veh.lf + veh.lr) + veh.cg_height * f_xk)
+            g.append(Uk[3] * gamma_x_s * (self.veh["lf"] + self.veh["lr"]) + self.veh["cg_height"] * f_xk)
             lbg.append([-pitch_relaxation])
             ubg.append([pitch_relaxation])
 
             # path constraint: lateral wheel load transfer assuming Kx = 0 (no roll)
-            g.append(Uk[4] * gamma_y_s * (veh.wf + veh.wr) + veh.cg_height * f_yk)
+            g.append(Uk[4] * gamma_y_s * (self.veh["wf"] + self.veh["wr"]) + self.veh["cg_height"] * f_yk)
             lbg.append([-roll_relaxation])
             ubg.append([roll_relaxation])
 
@@ -830,7 +879,7 @@ class BicycleModel:
             power_cap = 60
             
             # Determine the motor speed in rad/s
-            known_motor_speed = (Xk[7] + Xk[8]) / (2*veh.gear_ratio)
+            known_motor_speed = (Xk[7] + Xk[8]) / (2*self.veh["gear_ratio"])
             known_motor_speed = known_motor_speed * 30/np.pi # convert to rpm
 
             # Interpolate our motor curve to get the maximum allowed motor torque for this speed
@@ -1020,92 +1069,218 @@ class BicycleModel:
 
         df1.columns = header
 
-        self.save_output(df1, 'bicycle_out.xlsx')
+        save_output(df1, 'bicycle_out.xlsx')
 
         return df1
         
 
-# estimate the number of points we will get with the car
-def points_estimate(laptimes, energies): 
-    # predict our efficiency factor and score from the average laptime and energy drain
-    def calculate_efficiency_factor(avg_laptime, avg_energy_drain):
-        # assume LapTotal min, yours, and CO2 are all the same (22)
-        t_min = 67.667
-        t_max = 98.118
-        co2_min = 0.0518                            # avg kg CO2 per lap
-        eff_factor_min = 0.0591
-        eff_factor_max = 0.841
+
+
+
+class SweepWrapper:
+    def __init__(self, tracks, param_sweep):
+        print("Initializing Sweeper")
+        self.tracks = tracks
+        self.param_sweep = param_sweep
+
+    # calculate the number of points corresponding to event performance using rulebook
+    def points_estimate(self, laptimes, energies): 
+        # predict our efficiency factor and score from the average laptime and energy drain
+        def calculate_efficiency_factor(avg_laptime, avg_energy_drain):
+            # assume LapTotal min, yours, and CO2 are all the same (22)
+            t_min = 67.667
+            t_max = 98.118
+            co2_min = 0.0518                            # avg kg CO2 per lap
+            eff_factor_min = 0.0591
+            eff_factor_max = 0.841
+
+            
+            # predict RIT's efficiency factor
+            '''
+            t_yours = 73.467
+            e_yours = 4.903                             # kWh
+            co2_yours = e_yours * 0.65
+            co2_yours = co2_yours / 22                  # avg adjusted kg CO2 per lap
+            RIT_factor = t_min/t_yours * co2_min / co2_yours
+            RIT_score = 100 * (RIT_factor-eff_factor_min)/(eff_factor_max-eff_factor_min)
+            
+            print(RIT_factor)
+            print(RIT_score)
+            print(eff_factor_min)
+            '''
+            
+            # predict our efficiency factor
+            co2_yours = avg_energy_drain * 0.65          # avg adjusted kg CO2 per lap
+            eff_factor = t_min/avg_laptime * co2_min / co2_yours
+
+
+            #linear score approximator from eff_factor
+            m = (100-81.3)/(0.841-0.243)
+            Points = 89.9+m*(eff_factor-0.362)
+            #print(Points)
+
+            return eff_factor, Points
+        
+
+        # endurance time and energy are for the whole race (22 laps)
+        # autoX and acceleration times are for 1 run
+
+        reference_values = [1581.258,  # Minimum endurance time
+                            46.776,    # Minimum autocross time
+                            3.642,     # Minimum acceleration time
+                            4.898]    # Minimum skidpad time
+
+
+        # Reading reference values from ptsRef file
+        minimum_endurance_time = reference_values[0]/22
+        minimum_autoX_time = reference_values[1]
+        minimum_acceleration_time = reference_values[2]
+        minimum_skidpad_time = reference_values[3]
+        
+        max_endurance_time = 1.45*minimum_endurance_time
+        max_autoX_time = 1.45*minimum_autoX_time
+        max_accel_time = 1.5*minimum_acceleration_time
+        max_skidpad_time = 1.25*minimum_skidpad_time
+
+        # Calculate points for Endurance, Autocross, Skidpad, and Acceleration (from rulebook)
+        points = {}
+        # TODO assuming all laps are completed we should add 25 points. Is this correct?
+        if 'endurance' in laptimes:
+            points['endurance'] = 25 + min(250, 250*((max_endurance_time/laptimes['endurance'])-1)/((max_endurance_time/minimum_endurance_time)-1))
+
+            if 'endurance' in energies:
+                # hardcoded results from 2023
+                CO2_min = 0.0518
+                minimum_endurance_time = 67.667
+                eff_factor_min = 0.059
+                eff_factor_max = 0.841
+
+                # estimate our efficiency factor from 2023 results 
+                efficiency_factor, efficiency_score_2023 = calculate_efficiency_factor(laptimes['endurance'], energies['endurance'])
+                efficiency_score_2024 = min(100, 100*(efficiency_factor-eff_factor_min)/(eff_factor_max-eff_factor_min))
+
+                points['efficiency'] = efficiency_score_2024
+
+        if 'autoX' in laptimes:
+            points['autoX'] = min(125, 118.5*((max_autoX_time/laptimes['autoX'])-1)/((max_autoX_time/minimum_autoX_time)-1) + 6.5)
+
+        if 'skidpad' in laptimes:
+            points['skidpad'] = min(75, 71.5*(((max_skidpad_time/laptimes['skidpad'])**2 - 1)/((max_skidpad_time/minimum_skidpad_time)**2 - 1)) + 3.5)
+        
+        if 'accel' in laptimes:
+            points['accel'] = min(100, 95.5*((max_accel_time/laptimes['accel'])-1)/((max_accel_time/minimum_acceleration_time)-1) + 4.5)
+
 
         
-        # predict RIT's efficiency factor
+
+        return points
+
+
+    # Estimates competition points gained by given vehicle
+    def get_points(self, vehicle):
+        mesh = 0.25 #m
+
+        # Define test track; TODO move this up in our structure
+        basename = "track_files/"
+        end_file = 'Michigan_2021_Endurance.xlsx'
+        autoX_file = 'Michigan_2022_AutoX.xlsx'
+        skidpad_file = 'Skidpad.xlsx'
+        accel_file = 'Acceleration.xlsx'
+
+        track_files = {'endurance': end_file, 
+                       'autoX': autoX_file, 
+                       'skidpad': skidpad_file, 
+                       'accel': accel_file}
+        
+        parts = {'endurance': 6, 
+                'autoX': 6, 
+                'skidpad': 2, 
+                'accel': 2}
+        
+        laptimes = {}
+        energies = {}
+
+        # Instantiate and run solvers for each event
+        for event, file in track_files.items():
+
+            # If we're considering this event
+            if event in self.tracks:
+                # Create a new solver for the given track and vehicle
+                solver = BicycleModel(basename+file, mesh, parts[event])
+                solver.update_vehicle(vehicle)
+
+                laptime, energy = solver.run()
+                laptimes[event] = laptime
+                energies[event] = energy
+
+        # Use the results of our sim to predict our competition points performance
+        points = self.points_estimate(laptimes, energies)
+        total = sum(points.values())
+        points['total'] = total
+
+        return laptimes, energies, points
+        
+    # Run get_points for several vehicles, combining the outputs into one massive df for output
+    def sweep(self):
         '''
-        t_yours = 73.467
-        e_yours = 4.903                             # kWh
-        co2_yours = e_yours * 0.65
-        co2_yours = co2_yours / 22                  # avg adjusted kg CO2 per lap
-        RIT_factor = t_min/t_yours * co2_min / co2_yours
-        RIT_score = 100 * (RIT_factor-eff_factor_min)/(eff_factor_max-eff_factor_min)
-        
-        print(RIT_factor)
-        print(RIT_score)
-        print(eff_factor_min)
+        What parameters do we use / need to sweep over for time targets?
+
+        mass
+        capacity (ignore for now)
+        friction coefficients (ignore this for now; more tire stuff later)
+        tire radius
+        lift and drag coefficients
+        front aero distribution / center of pressure location
         '''
+
+        base_vehicle = Vehicle()
+
+        # Create vehicle objects corresponding to all the parameters
+        swept_vehicles = base_vehicle.sweep_parameters(self.param_sweep)    
+
+        # Calculate get_points for each vehicle and summarize the results
+        summary = []
+        param_summary = []
+        for i, vehicle in enumerate(swept_vehicles):
+            vehicle_summary = {
+                "Vehicle ID": i + 1,  # Assign a vehicle ID for reference
+            }
+            
+            # TODO; assumes data exists for each track; modify this later
+            laptimes, energies, points = self.get_points(vehicle)
+            
+            # Log vehicle parameters corresponding to each ID
+            param_summary.append({"Vehicle ID": i + 1, **vehicle.params})
+
+            # Add lap times, energies, and points
+            for track in self.tracks:
+                vehicle_summary[f"Lap Time - {track}"] = laptimes[track]
+                vehicle_summary[f"Energy - {track}"] = energies[track]
+                vehicle_summary[f"Points - {track}"] = points[track]
+
+            # Include the total points separately
+            vehicle_summary["Total Points"] = points["total"]
+
+            summary.append(vehicle_summary)
+
+
+        # Export output summary
+        save_output(summary, "sweep_results.xlsx", param_summary)
         
-        # predict our efficiency factor
-        co2_yours = avg_energy_drain * 0.65          # avg adjusted kg CO2 per lap
-        eff_factor = t_min/avg_laptime * co2_min / co2_yours
 
+def main_test():
+    # Identify which events are relevant to our study    
+    tracks = ['endurance', 'autoX'] #, 'skidpad', 'accel']
 
-        #linear score approximator from eff_factor
-        m = (100-81.3)/(0.841-0.243)
-        Points = 89.9+m*(eff_factor-0.362)
-        #print(Points)
+    # Identify which parameters we want to sweep over
+    param_sweep = {
+                "M": [250],       # Mass in kg
+                "gear_ratio": [3.0, 3.5]  # Gear ratio
+    }
 
-        return eff_factor, Points
-    
+    sweeper = SweepWrapper(tracks, param_sweep)
+    sweeper.sweep()
 
-    # endurance time and energy are for the whole race (22 laps)
-    # autoX and acceleration times are for 1 run
-
-    reference_values = [1581.258,  # Minimum endurance time
-                        46.776,    # Minimum autocross time
-                        3.642,     # Minimum acceleration time
-                        4.898]    # Minimum skidpad time
-
-
-    # Reading reference values from ptsRef file
-    minimum_endurance_time = reference_values[0]/22
-    minimum_autoX_time = reference_values[1]
-    minimum_acceleration_time = reference_values[2]
-    minimum_skidpad_time = reference_values[3]
-    
-    max_endurance_time = 1.45*minimum_endurance_time
-    max_autoX_time = 1.45*minimum_autoX_time
-    max_accel_time = 1.5*minimum_acceleration_time
-    max_skidpad_time = 1.25*minimum_skidpad_time
-
-    # Calculate points for Endurance, Autocross, Skidpad, and Acceleration (from rulebook)
-    points = {}
-    # TODO assuming all laps are completed we should add 25 points. Is this correct?
-    points['endurance'] = 25 + min(250, 250*((max_endurance_time/laptimes['endurance'])-1)/((max_endurance_time/minimum_endurance_time)-1))
-    points['autoX'] = min(125, 118.5*((max_autoX_time/laptimes['autoX'])-1)/((max_autoX_time/minimum_autoX_time)-1) + 6.5)
-    points['skidpad'] = min(75, 71.5*(((max_skidpad_time/laptimes['skidpad'])**2 - 1)/((max_skidpad_time/minimum_skidpad_time)**2 - 1)) + 3.5)
-    points['accel'] = min(100, 95.5*((max_accel_time/laptimes['accel'])-1)/((max_accel_time/minimum_acceleration_time)-1) + 4.5)
-
-
-    # hardcoded results from 2023
-    CO2_min = 0.0518
-    minimum_endurance_time = 67.667
-    eff_factor_min = 0.059
-    eff_factor_max = 0.841
-
-    # estimate our efficiency factor from 2023 results 
-    efficiency_factor, efficiency_score_2023 = calculate_efficiency_factor(laptimes['endurance'], energies['endurance'])
-    efficiency_score_2024 = min(100, 100*(efficiency_factor-eff_factor_min)/(eff_factor_max-eff_factor_min))
-
-    points['efficiency'] = efficiency_score_2024
-
-    return points
 
 def run_test():
     # Define test track
@@ -1121,71 +1296,4 @@ def run_test():
     solver.run()
 
 
-def get_points():
-    mesh = 0.25 #m
-
-    # Define test track
-    basename = "track_files/"
-    end_file = 'Michigan_2021_Endurance.xlsx'
-    autoX_file = 'Michigan_2022_AutoX.xlsx'
-    skidpad_file = 'Skidpad.xlsx'
-    accel_file = 'Acceleration.xlsx'
-
-    tracks = ['endurance', 'autoX', 'skidpad', 'accel']
-    track_files = [end_file, autoX_file, skidpad_file, accel_file]
-    laptimes = {}
-    energies = {}
-
-    # Instantiate and run solvers for each event
-    for idx, file in enumerate(track_files):
-        # Partition endurance and autoX four times to ease convergence
-        # TODO; WIP; these may need to be tuned more
-        if idx == 3 or idx == 2:
-            parts = 1
-        else:
-            parts = 5
-
-        solver = BicycleModel(file, mesh, parts)
-        laptime, energy = solver.run()
-        laptimes[tracks[idx]] = laptime
-        energies[tracks[idx]] = energy
-
-    # Use the results of our sim to predict our competition points performance
-    points = points_estimate(laptimes, energies)
-    total = sum(points.values())
-
-    header = [
-            "endurance_time",
-            "endurance_energy",
-            "endurance_points",
-            "efficiency_points",
-            "autoX_time",
-            "autoX_energy",
-            "autoX_points",
-            "skidpad_time",
-            "skidpad_energy",
-            "skidpad_points",
-            "accel_time",
-            "accel_energy",
-            "accel_points",
-            "total_points"
-    ]
-
-    results = pd.DataFrame(columns=header)
-
-    # Populate our output df
-    
-
-def sweep_vehicles():
-    '''
-    What parameters do we use / need to sweep over for time targets?
-
-    mass
-    capacity (ignore for now)
-    friction coefficients (ignore this for now; more tire stuff later)
-    tire radius
-    lift and drag coefficients
-    front aero distribution / center of pressure location
-    '''
-
-# run_test()
+main_test()
