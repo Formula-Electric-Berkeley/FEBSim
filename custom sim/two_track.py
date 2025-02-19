@@ -242,27 +242,68 @@ def opt_mintime():
     Fix this week
     """
 
-    # define physical constants
+    # define physical constants and vehicle parameters; pass these in in the future
     g = 9.81  # [m/s^2]
-    mass = veh.M  # [kg]
-    lf = veh.lf  # front wheelbase length (from COM to front axle)
-    lr = veh.lr  # rear  wheelbase length
-    L = lf + lr  # total wheelbase length
-    wf = veh.wf  # front axle width (distance between centers of wheels)
-    wr = veh.wr  # rear axle width
+    mass = veh.M    # [kg]
+    lf = veh.lf     # front wheelbase length (from COM to front axle)
+    lr = veh.lr     # rear  wheelbase length
+    L = lf + lr     # total wheelbase length
+    wf = veh.wf     # front axle width (distance between centers of wheels)
+    wr = veh.wr     # rear axle width
 
-    Je = veh.Je  # engine moment of inertia TODO -> modify with real data
-    Jw = veh.Jw  # wheel moment of inertia
-    re = veh.re  # effective wheel radius
-    rb = veh.rb  # effective brake radius
-    Iz = veh.Iz  # vehicle moment of inertia about z axis
+    Je = veh.Je     # engine moment of inertia TODO -> modify with real data
+    Jw = veh.Jw     # wheel moment of inertia
+    re = veh.re     # effective wheel radius
+    rb = veh.rb     # effective brake radius
+    Iz = veh.Iz     # vehicle moment of inertia about z axis
+
+    # Aero stuff
+    air_density = veh.rho
+    frontal_area = veh.A
+    Cl = -0.5       # NEGATIVE Cl means downforce
+    Cd = -0.5       # negative Cd means drag
+
+    drag_coeff = 0.5*air_density*Cl*frontal_area
+    df_coeff = - 0.5*air_density*Cd*frontal_area    # "Positive force" = down
+
+    # TODO; WIP implementation 9/30/24
+    # Compute aerodynamic and drag forces
+    # Assumes df shared equally bw all wheels and that front area and Cl/Cd do not change w angle of attack
+    # Also assumes 0.5 COP right now
+    Fx_aero_drag = drag_coeff * v * v
+    Fz_aero_down = df_coeff * v * v          
+
+    # TODO; fix roll and dynamic load transfer calculations
+    '''
+    f_xroll_fl = 0.5 * tire["c_roll"] * mass * g * veh["wheelbase_rear"] / veh["wheelbase"]
+    f_xroll_fr = 0.5 * tire["c_roll"] * mass * g * veh["wheelbase_rear"] / veh["wheelbase"]
+    f_xroll_rl = 0.5 * tire["c_roll"] * mass * g * veh["wheelbase_front"] / veh["wheelbase"]
+    f_xroll_rr = 0.5 * tire["c_roll"] * mass * g * veh["wheelbase_front"] / veh["wheelbase"]
+    f_xroll = tire["c_roll"] * mass * g
+
+    f_zdyn_fl = (-0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xdrag - f_xroll)
+                 - veh["k_roll"] * gamma_y)
+    f_zdyn_fr = (-0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xdrag - f_xroll)
+                 + veh["k_roll"] * gamma_y)
+    f_zdyn_rl = (0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xdrag - f_xroll)
+                 - (1.0 - veh["k_roll"]) * gamma_y)
+    f_zdyn_rr = (0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xdrag - f_xroll)
+                 + (1.0 - veh["k_roll"]) * gamma_y)
+    
+    '''
+    
 
     # compute normal forces at each wheel, assumes wf roughly equals wr
     # this will be used by our tire model to compute grip forces at each wheel
-    F_Nfr = (mass * g * lr) / (L * 2) + gamma_x - gamma_y
-    F_Nfl = (mass * g * lr) / (L * 2) + gamma_x + gamma_y
-    F_Nrr = (mass * g * lf) / (L * 2) - gamma_x - gamma_y
-    F_Nrl = (mass * g * lf) / (L * 2) - gamma_x + gamma_y
+    F_Nfr_weight = (mass * g * lr) / (L * 2) + gamma_x - gamma_y
+    F_Nfl_weight = (mass * g * lr) / (L * 2) + gamma_x + gamma_y
+    F_Nrr_weight = (mass * g * lf) / (L * 2) - gamma_x - gamma_y
+    F_Nrl_weight = (mass * g * lf) / (L * 2) - gamma_x + gamma_y
+
+    F_Nfr = F_Nfr_weight + Fz_aero_down*0.25
+    F_Nfl = F_Nfl_weight + Fz_aero_down*0.25
+    F_Nrr = F_Nrr_weight + Fz_aero_down*0.25
+    F_Nrl = F_Nrl_weight + Fz_aero_down*0.25
 
     # project velocity to longitudinal and lateral vehicle axes (for eventual calculation of drag and slip angle/ratio)
     vx = v * ca.cos(beta)
@@ -289,14 +330,13 @@ def opt_mintime():
     vtrl = vy_rl
 
     # compute the slip angles from the velocities at each wheel
-    alpha_fr = -ca.arctan(
-        vtfr / ca.fabs(vlfr)
-    )  # TODO: old code used the smooth_abs helper function; replace if fucked
+    alpha_fr = -ca.arctan(vtfr / ca.fabs(vlfr))  
     alpha_fl = -ca.arctan(vtfl / ca.fabs(vlfl))
     alpha_rr = -ca.arctan(vtrr / ca.fabs(vlrr))
     alpha_rl = -ca.arctan(vtrl / ca.fabs(vlrl))
 
     # compute the slip ratios
+    epsilon = 0.05 # smoothing parameter
     sigma_fr = (re * wfr - vlfr) / ca.fabs(vlfr)
     sigma_fl = (re * wfl - vlfl) / ca.fabs(vlfl)
     sigma_rr = (re * wrr - vlrr) / ca.fabs(vlrr)
@@ -318,14 +358,10 @@ def opt_mintime():
     Fx_rl = Flrl    # Driven wheels are oriented parallel to the car in RWD
     Fy_rl = Ftrl
 
-    # drag forces
-    Fx_aero = (
-        -veh.drag_coeff * vx * ca.fabs(vx)
-    )  # TODO add rolling resistance here later
-
+    
     # compute the net force and torque on the vehicle
     Fx = (
-        Fx_fr + Fx_fl + Fx_rl + Fx_rr + Fx_aero
+        Fx_fr + Fx_fl + Fx_rl + Fx_rr + Fx_aero_drag
     )  # net force in the x (longitudinal car direction)
     Fy = Fy_fr + Fy_fl + Fy_rr + Fy_rl  # net force in the y (lateral car direction)
     
@@ -351,6 +387,7 @@ def opt_mintime():
     torque_brake_rr = rb * F_brake_rr
     torque_brake_rl = rb * F_brake_rl
 
+
     # ------------------------------------------------------------------------------------------------------------------
     # DERIVATIVES ------------------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
@@ -372,7 +409,7 @@ def opt_mintime():
         + (Flfl + Flfr) * ca.cos(delta - beta)
         + (Ftrl + Ftrr) * ca.sin(beta)
         - (Ftfl + Ftfr) * ca.sin(delta - beta)
-        - Fx_aero * ca.cos(beta)
+        - Fx_aero_drag * ca.cos(beta)
     )
 
     dbeta = sf * (
@@ -382,7 +419,7 @@ def opt_mintime():
             + (Flfl + Flfr) * ca.sin(delta - beta)
             + (Ftrl + Ftrr) * ca.cos(beta)
             + (Ftfl + Ftfr) * ca.cos(delta - beta)
-            + Fx_aero * ca.sin(beta)
+            + Fx_aero_drag * ca.sin(beta)
         )
         / (mass * v)
     )
@@ -741,12 +778,12 @@ def opt_mintime():
 
         """
         
-        '''
+        
         ##################### Implementation of the motor curve
         
 
         # Power cap in kW; make this a control variable later
-        power_cap = 30
+        power_cap = 60
         
         # Determine the motor speed in rad/s
         known_motor_speed = (Xk[7] + Xk[8]) / (2*veh.gear_ratio)
@@ -777,14 +814,7 @@ def opt_mintime():
         lbg.append([0.0])
         ubg.append([ca.inf])
 
-        '''
-
-
-
-        # TODO: remaining issues
-        # fix alternating between drive and brake
-        # fix hard steering
-
+    
         '''
 
         # limit rate of change of steering and drive commands (dynamic actuator constraints)
@@ -996,7 +1026,7 @@ def opt_mintime():
     ]
 
     # Create a Pandas Excel writer using XlsxWriter as the engine
-    writer = pd.ExcelWriter("two_track_out2.xlsx", engine="xlsxwriter")
+    writer = pd.ExcelWriter("two_track_test_out.xlsx", engine="xlsxwriter")
 
     # Write the dataframe to a excel sheet
     df1.to_excel(writer, sheet_name="Sheet1", index=False, header=header)

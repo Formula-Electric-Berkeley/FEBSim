@@ -152,9 +152,11 @@ ratio_gearbox = info.at[(i, "Value")]
 two_track = True
 
 if two_track:
+    motor_speeds, motor_torques = motor.get_motor_curve(power_cap)
+    drive_max = np.max(motor_torques)
     drag_coeff = 1/2*rho*factor_Cl*Cl*A #coefficient in front of v^2 for drag force calculation
     delta_max = 38 * np.pi / 180 #38 degrees is our max steering angle
-    drive_max = 20000 #Nm
+    # drive_max = 20000 #Nm
     brake_max = 50000 #N
     max_velocity = 30 #m/s; makes convergence faster
 

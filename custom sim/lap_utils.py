@@ -47,20 +47,21 @@ def next_point(j, j_max, mode, tr_config='Closed'):
 # Rudimentary implementation of load sensitivity
 # Prior to slip angles => Add these this weekend
 def load_sensitivity(vertical_load):
+    return vertical_load
     
-    # Fit coefficients
-    max_load = 4500                     # 4500, 1.8, 0.5; use Desmos
-    load_sensitivity = 1.8              
-    center = 0.5
+    # # Fit coefficients
+    # max_load = 4500                     # 4500, 1.8, 0.5; use Desmos
+    # load_sensitivity = 1.8              
+    # center = 0.5
 
-    # Normalize the actual load between 0 and 1 based on the maximum load
-    normalized_load = vertical_load / max_load
+    # # Normalize the actual load between 0 and 1 based on the maximum load
+    # normalized_load = vertical_load / max_load
     
-    # Sigmoid function to simulate load sensitivity
-    dynamic_max_load = max_load / (1 + np.exp(-load_sensitivity * (normalized_load - center)))        
+    # # Sigmoid function to simulate load sensitivity
+    # dynamic_max_load = max_load / (1 + np.exp(-load_sensitivity * (normalized_load - center)))        
 
-    #print("{} {} ".format(vertical_load, dynamic_max_load))
-    return min(dynamic_max_load, vertical_load)
+    # #print("{} {} ".format(vertical_load, dynamic_max_load))
+    # return min(dynamic_max_load, vertical_load)
     
 
 def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):

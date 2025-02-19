@@ -129,11 +129,11 @@ def simulate_mainloop(veh, tr):
                         # we know the rest of the velocities using our current i will not give a minimum velocity segment, so we go to a different i
                         if np.max(v[j_next, i, k] >= v[j_next, i_rest, k]) or np.max(v[j_next, i, k] > v[j_next, i_rest, k_rest]):
                             skipped += 1
-                            break
+                            # break
                     
                     # Updating flag and Moving to the next point index
                     flag[j, k] = True 
-                    j_next, j = lap_utils.next_point(j, tr.n-1, mode )
+                    j_next, j = lap_utils.next_point(j, tr.n-1, mode)
                     
 
                     # Checking if the lap is completed
@@ -271,7 +271,10 @@ def simulate(pack):
     #scaled_motor_power = skidpad_scale_factor * motor_power
 
 
-    energy_drain = energy_cost_total
+    energy_drain = energy_cost_total-energy_gained_total
+
+    # Extremely rough hotfix for regen; decrease all motor power values
+    motor_power *= energy_drain/energy_cost_total
     
 
 
@@ -349,7 +352,7 @@ def simulate(pack):
         V[i] = min(V[i], basespeed)
 
     
-
+    
     # re-calculate laptime with base speed limitation    
     dt = np.divide(tr.dx, V)
     time = np.cumsum(dt)

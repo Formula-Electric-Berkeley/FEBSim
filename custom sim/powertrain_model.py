@@ -4,7 +4,7 @@ from scipy.interpolate import interp1d
 from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 import casadi as ca
-
+from scipy.interpolate import Rbf
 import matplotlib.pyplot as plt
 
 class motor():
@@ -27,6 +27,8 @@ class motor():
         self.N_P             = 10        # Number of pole pairs in the motor
 
         self.RPM_TO_OMEGA    = 0.10472   # 2pi / 60
+
+        self.get_motor_efficiency()
 
 
     def get_motor_curve(self, power_cap):
@@ -125,86 +127,56 @@ class motor():
 
         return base_speed, estimated_kV
     
-    
 
 
-    def motor_efficiency(motor_speed, motor_torque):
-        colors = ['red', 'orange', 'green', 'blue', 'violet']
+    def get_motor_efficiency(self):
+        colors = ['red', 'orange', 'green', 'blue', 'violet']  # Not used here
 
         base_name = 'motor_curves\\'
-
-        labels = [86, 90, 94, 95, 96]
+        labels = [86, 90, 94, 95, 96]  # Efficiency values
         datasets = []
-        for i, label in enumerate(labels):
-            dfi = pd.read_csv(base_name+'{}.csv'.format(labels[i]), header=None)
-            dfi.columns = ['motor_speed', 'motor_torque']
-            dfi['motor_speed'] = dfi['motor_speed'] #* 2*np.pi/60 # convert to rads/s
 
-            eff_frame = pd.DataFrame({'efficiency': [labels[i]]})
-
-            dfi = pd.concat((dfi, eff_frame))
+        for label in labels:
+            # Load CSV
+            dfi = pd.read_csv(f"{base_name}{label}.csv", header=None, names=['motor_speed', 'motor_torque'])
             
+            # Add efficiency column
+            dfi['efficiency'] = label
+            
+            # Store the processed DataFrame
             datasets.append(dfi)
 
-        df_all = pd.concat([dfi[0], dfi[1], dfi[2], dfi[3], dfi[4]])
+        # Concatenate all datasets
+        df_all = pd.concat(datasets, ignore_index=True)
 
-        
-        plt.figure(figsize=(10, 8))
-
-
-        for df, color, label in zip(datasets, colors, labels):
-            # Plotting original points]
-            plt.scatter(df['X'], df['Y'], label=f'{label}', color=color, alpha=0.5)
-
-        
-
-        # Create a grid for interpolation
-        grid_x, grid_y = np.mgrid[0:5001:100j, 0:251:100j]
-
-        # Interpolate the efficiency values on the grid
-        points = df_all[['motor_speed', 'motor_torques']].values
-        values = df_all[['efficiency']].values
-
-        #grid_z = griddata(points, values, (grid_x, grid_y), method='cubic')
-
-        #plt.contourf(grid_x, grid_y, grid_z, levels=15, cmap='viridis')
-        #plt.colorbar(label='Efficiency')
+        # Define interpolator for motor efficiency
+        self.rbf = Rbf(df_all['motor_speed'], df_all['motor_torque'], df_all['efficiency'], function='linear')
 
 
-        plt.title('Motor Efficiency')
-        plt.xlabel('Motor Speed (rad/s)')
-        plt.ylabel('Torque (Nm)')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
+        # Plot the efficiency curve
+
+        def plot_motor_eff():
+            plt.figure(figsize=(10, 8))
+
+            for i, label in enumerate(labels):
+                subset = df_all[df_all['efficiency'] == label]
+                plt.scatter(subset['motor_speed'], subset['motor_torque'], 
+                            color=colors[i], label=f'{label}% Efficiency', alpha=0.7)
 
 
+            plt.xlabel("Motor Speed (RPM)")
+            plt.ylabel("Motor Torque (Nm)")
+            plt.title("Motor Efficiency Scatter Plot")
+            plt.legend()
+            plt.grid(True)
+            plt.show()
 
-        #return griddata(points, values, (motor_speed, motor_torque), method='cubic')
-
-
-
-
-def test_motor():
-    motor().plot_motor_curve(30)
-
-    motor_speeds, motor_torques = motor().get_motor_curve(power_cap=30)
-    print(motor_torques)
-
-    '''test_motor_speed = 1500  # Motor speed within the range
-    torque_interp = ca.interpolant('torque_interpolated', 'linear', [motor_speeds], motor_torques)
-    test_torque = torque_interp(test_motor_speed)
-    print(f"Interpolated torque at {test_motor_speed} rpm: {test_torque}")
-
-    plt.scatter(motor_speeds, motor_torques, color='red', label="Data Points")
-    plt.xlabel('Motor Speed (rpm)')
-    plt.ylabel('Torque')
-    plt.legend()
-    plt.show()'''
+    def interpolate_efficiency(self, speed, torque):
+        efficiency_est = self.rbf(speed, torque)
+        return efficiency_est
 
     
-#test_motor()
-    
+
 class drexler_differential():
     def __init__(self):
         ramp_angles =       [30, 40, 45, 50, 60] # degrees

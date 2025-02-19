@@ -51,7 +51,7 @@ def calculate_efficiency_factor(avg_laptime, energy_drain):
 
 
 # estimate the number of points we will get with the car
-def points_estimate(numLaps, time_endurance, energy_endurance, time_autoX, time_acceleration): 
+def points_estimate(time_endurance, energy_endurance, time_autoX, time_acceleration=10.0): 
     # endurance time and energy are for the whole race (22 laps)
     # autoX and acceleration times are for 1 run
 
@@ -64,7 +64,7 @@ def points_estimate(numLaps, time_endurance, energy_endurance, time_autoX, time_
 
 
     # Reading reference values from ptsRef file
-    minimum_endurance_time = reference_values[0]
+    minimum_endurance_time = reference_values[0]/22
     minimum_autoX_time = reference_values[1]
     minimum_acceleration_time = reference_values[2]
     
@@ -95,7 +95,7 @@ def points_estimate(numLaps, time_endurance, energy_endurance, time_autoX, time_
     # estimate our efficiency factor from 2023 results 
     #CO2_ours = CO2_conversion*energy_endurance*RIT_scale_factor/numLaps
     #efficiency_factor = (minimum_endurance_time/time_endurance) * (CO2_min/CO2_ours)
-    efficiency_factor, efficiency_score_2023 = calculate_efficiency_factor(time_endurance/numLaps, energy_endurance)
+    efficiency_factor, efficiency_score_2023 = calculate_efficiency_factor(time_endurance, energy_endurance)
 
     # using the 2023 metric to calculate efficiency
     #efficiency_score_2023 = min(100, 100*((eff_factor_min/efficiency_factor)-1)/((eff_factor_min/eff_factor_max)-1))
@@ -224,7 +224,8 @@ def autoX_sweep():
 
 # alter this as needed, depending on what we want to sweep
 def aero_sweep(numLaps, track_file, masses, aero_coefficients, 
-               pack_dimensions, safe_voltages, derating_bounds, power_caps, report_transient_data=False):    
+               pack_dimensions, safe_voltages, derating_bounds, power_caps, report_transient_data=False,
+               outputfilename='aero_sweep_data.xlsx'):    
     # output vectors of the sim for easier output in excel 
     names = []
     end_times = []
@@ -255,7 +256,7 @@ def aero_sweep(numLaps, track_file, masses, aero_coefficients,
 
                 for l, aero_package in enumerate(aero_coefficients):
                     if report_transient_data:
-                        small_writer = pd.ExcelWriter('transient_data_{:}_{:}_{:}.xlsx'.format(cell_data["name"], mass, l), engine='xlsxwriter')
+                        small_writer = pd.ExcelWriter('transient_data_regen_{:}_{:}_{:}.xlsx'.format(cell_data["name"], mass, l), engine='xlsxwriter')
                         transient_header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)', 
                                             'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Motor Power (W)', 'Current Draw (A)']
 
@@ -301,7 +302,7 @@ def aero_sweep(numLaps, track_file, masses, aero_coefficients,
     df1 = pd.DataFrame(df0)
 
     # TODO; change this so it checks if the current file exists. I'm lazy
-    writer = pd.ExcelWriter('aero_sweep_data.xlsx', engine='xlsxwriter')
+    writer = pd.ExcelWriter(outputfilename, engine='xlsxwriter')
 
     df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
     writer.close()
@@ -570,106 +571,39 @@ def skidpad_test():
     print("Without aero: {} s; {} kWh".format(laptimes[1], energies[1]))
 
 
-
-
-
-
-def get_points():
-    mass_with_aero = 245.0 # kg
-    driver_mass = 45.0 # kg
-    mass = mass_with_aero + driver_mass
-
-    # No aero
-    no_aero = [-0.05, -0.52]
-    mass -= 14
-
-    cap = 30 # kW
-    autoX_trackfile = "Michigan_2022_AutoX.xlsx" # Placeholder
+def get_points(mass, aero_package, pack, power_cap_autoX, autoX_trackfile,
+                power_cap_end, endurance_trackfile, numEndLaps=22):    
     
+    # Reset the pack before reloading the vehicle
+    pack.reset()       
+
+    # AutoX
     track.reload(autoX_trackfile)
-
-    numEnduranceLaps = 22
-    
-    pack_info = {
-        "series": 14, 
-        "parallel": 4,
-        "segment": 10
-    }
-
-    # Establish the pack before reloading the vehicle
-    pack = accumulator.Pack()
-    pack.pack(pack_info["series"], pack_info["parallel"], pack_info["segment"])
-
-    pack.reset()        # Useful to do at the beginning 
-
-    # Load high df for autoX
-    high_downforce = [-1.98, -1.33]
-
-    # Load low drag config aero for endurance
-    low_drag = [-1.23, -0.93]
-
-    vehicle.soft_reload(mass, power_cap = cap, new_aero= no_aero)
-
+    vehicle.soft_reload(mass, power_cap = power_cap_autoX, new_aero= aero_package)
     autocross_time, autocross_energy, _ = open_loop.simulate(pack)
 
-    print(f"Autocross completed in {round(autocross_time, 2)} seconds using {round(autocross_energy, 2)} kWh.")
 
-    # Calculate autoX points
-
-    # We make an assumption that the car doesn't hit any cones and doesn't miss any gates
-    min_time = 46.776 # Taken from score document here https://www.sae.org/binaries/content/assets/cm/content/attend/student-events/results/formula-sae/fsae_ev_2024_results.pdf
-    max_time = 1.45 * min_time
-
-    # Read more here https://www.fsaeonline.com/cdsweb/gen/DocumentResources.aspx
-    if autocross_time <= max_time:
-        # The denominator should always be 0.45, but this is how it's written in the document so I'm leaving it.
-        autocross_score = 118.5 * ((max_time / autocross_time) - 1) / ((max_time / min_time) - 1) + 6.5
-    else:
-        autocross_score = 6.5
-    
-
-
-    # Load the endurance track and reset the vehicle
-    endurance_trackfile = "Michigan_2021_Endurance.xlsx" # Placeholder
-    # Set grip factor of 0.7
-    track.reload(endurance_trackfile, grip=0.7)
-    cap = 20
-
+    # Endurance
     pack.reset()
-    vehicle.soft_reload(mass, power_cap = cap, new_aero= no_aero)
-    
-    
+    track.reload(endurance_trackfile, grip=0.7)
+    vehicle.soft_reload(mass, power_cap = power_cap_end, new_aero= aero_package)
+    endurance_time, endurance_energy, _, _ = open_loop.simulate_laps(pack, numEndLaps)
+    endurance_time = endurance_time/numEndLaps
 
+    ptsEnd, ptsAutoX, ptsEff, ptsTot = points_estimate(endurance_time, endurance_energy, autocross_time)
 
-    endurance_time, endurance_energy, _, _ = open_loop.simulate_laps(pack, numEnduranceLaps)
-
-    print(f"Endurance completed in {round(endurance_time, 2)} seconds using {round(endurance_energy, 2)} kWh.")
-
-    min_time = 1581.258
-    max_time = 1.45 * min_time
-
-    if endurance_time <= max_time:
-        endurance_score = 250 * ((max_time / endurance_time) - 1) / ((max_time / min_time) - 1)
-    else:
-        endurance_score = 0
-
-    # Also we get a +25 "laps" score
-
-    # Efficiency score is still a little wonky
-
-
-    return autocross_score, endurance_score
+    return autocross_time, autocross_energy, endurance_time, endurance_energy, ptsAutoX, ptsEnd, ptsTot
     
 
 # Wrapper function to make high-level changes to aero_sweep
 def sweep_wrapper():
     # Track information
-    numLaps = 1
-    track_file = 'Michigan_2022_AutoX.xlsx'
+    numLaps = 22
+    track_file = 'Michigan_2021_Endurance.xlsx'
 
     # General / physical information
     base_mass = 215.0                   # kg
-    driver_masses = range(0, 150, 5)
+    driver_masses = range(0, 150, 50)
     masses = []
     for driver_mass in driver_masses:
         masses.append(base_mass + driver_mass)
@@ -680,7 +614,7 @@ def sweep_wrapper():
                         #[-0.05, -0.52]]           # No aero package
 
 
-    num_coefficients = 15
+    num_coefficients = 2
     Cls = np.linspace(0.5, 3, num_coefficients)
     Cds = np.linspace(0.5, 3, num_coefficients)
 
@@ -692,14 +626,128 @@ def sweep_wrapper():
 
 
     # Electrical information
-    power_caps = [60]#, 40]
-    pack_dimensions = [[16, 4, 8]]          # array of pack dimensions. A single pack dimension has the form [series, parallel, segment]
+    power_caps = [20]#, 40]
+    pack_dimensions = [[14, 4, 10]]          # array of pack dimensions. A single pack dimension has the form [series, parallel, segment]
     safe_voltages = [400]#, 250]            # Depends on a given pack. Ask EE
     derating_bounds = [460]#, 290]
 
     
 
-    aero_sweep(numLaps, track_file, masses, aero_coeffs, pack_dimensions, safe_voltages, derating_bounds, power_caps, False)
+    aero_sweep(numLaps, track_file, masses, aero_coefficients, pack_dimensions, safe_voltages, derating_bounds, power_caps, True, outputfilename='aero_sweep_regen.xlsx')
+
+
+
+def points_wrapper():
+    autoX_trackfile = 'Michigan_2022_AutoX.xlsx'
+    end_trackfile = 'Michigan_2021_Endurance.xlsx'
+
+    # General / physical information
+    base_mass = 215.0                   # kg
+    driver_masses = range(0, 150, 10)
+    masses = []
+    for driver_mass in driver_masses:
+        masses.append(base_mass + driver_mass)
+
+    # Cl, Cd
+    aero_coefficients = [[-1.98, -1.33]]#,            # High downforce config; negative = downforce, + is lift
+                      #  [-1.23, -0.93]]#,           # Low drag config; must be negative!
+                        #[-0.05, -0.52]]           # No aero package
+
+
+    num_coefficients = 6
+    Cls = np.linspace(0.5, 2.5, num_coefficients)
+    Cds = np.linspace(0.5, 2.5, num_coefficients)
+
+    aero_coeffs = []
+
+    for Cl in Cls:
+        for Cd in Cds:
+            aero_coeffs.append([-Cl, -Cd])
+
+
+    # Electrical information
+    autoX_power_caps = [30, 50]#, 40]
+    end_power_caps = [40]
+    pack_dimensions = [[16, 4, 8]]          # array of pack dimensions. A single pack dimension has the form [series, parallel, segment]
+    safe_voltages = [400]#, 250]            # Depends on a given pack. Ask EE
+    derating_bounds = [460]#, 290]
+
+
+
+    autoX_times = []
+    end_times = []
+    autoX_energies = []
+    end_energies = []
+    autoX_pts = []
+    end_pts = []
+    tot_pts = []
+    names = []
+    caps = []
+    Ms = []
+    Cls = []
+    Cds = []
+    capacities = []
+    
+    for k, pack_size in enumerate(pack_dimensions):
+        # initialize our pack
+        series, parallel, segment = pack_size
+        pack = accumulator.Pack()
+        pack.pack(series, parallel, segment)
+        pack.set_derating(safe_voltages[k], derating_bounds[k])
+
+        # get the cell mass, name, and capacity for output
+        cell_data = pack.get_cell_data()
+        capacity = cell_data["capacity"]/1000       # in 
+
+        for i, mass in enumerate(masses):
+            for j, power_cap in enumerate(autoX_power_caps):
+                for l, aero_package in enumerate(aero_coeffs):
+                    autocross_time, autocross_energy, endurance_time, endurance_energy, ptsAutoX, ptsEnd, ptsTot = get_points(mass, aero_package, pack, power_cap, autoX_trackfile, end_power_caps[j], end_trackfile)
+                    
+                    end_times.append(endurance_time)
+                    end_energies.append(endurance_energy)
+                    autoX_times.append(autocross_time)
+                    autoX_energies.append(autocross_energy)
+                    end_pts.append(ptsEnd)
+                    autoX_pts.append(ptsAutoX)
+                    tot_pts.append(ptsTot)
+                    caps.append(power_cap)
+                    Ms.append(mass)
+                    names.append(cell_data["name"])
+                    Cls.append(aero_package[0])
+                    Cds.append(aero_package[1])
+                    capacities.append(capacity) 
+
+
+    
+    # Output everything using Pandas
+    header = ['Pack Config', 'Mass (kg)', 'Capacity (kWh)', 'Power Cap (kW)', 'Cls', 'Cds', 'AutoX Time (s)', 'AutoX Energy (kWh)',
+              'End Time (s)', 'End Energy (kWh)', 'AutoX Pts', 'End Pts', 'Tot Pts']
+
+    names = np.vstack(names)
+    m = np.vstack(Ms)
+    Capacities = np.vstack(capacities)
+    cap = np.vstack(caps)
+    clift = np.vstack(Cls)
+    cdrag = np.vstack(Cds)
+
+    t1 = np.vstack(end_times)
+    e1 = np.vstack(end_energies)
+    t2 = np.vstack(autoX_times)
+    e2 = np.vstack(autoX_energies)
+    pts1 = np.vstack(end_pts)
+    pts2 = np.vstack(autoX_pts)
+    pts3 = np.vstack(tot_pts)
+
+    df0 = np.concatenate((names, m, Capacities, cap, clift, cdrag, t2, e2, t1, e1, pts2, pts1, pts3), axis=1)
+    df1 = pd.DataFrame(df0)
+
+    # TODO; change this so it checks if the current file exists. I'm lazy
+    writer = pd.ExcelWriter('points_sweep_data1.xlsx', engine='xlsxwriter')
+
+    df1.to_excel(writer, sheet_name='Sheet1', index=False, header=header)
+    writer.close()
+
 
 sweep_wrapper()
 
