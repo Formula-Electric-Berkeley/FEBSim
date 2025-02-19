@@ -8,6 +8,7 @@ import pandas as pd
 
 import track_for_bicycle as tr
 import vehicle as veh
+import bicycle_alpha as bi
 
 import powertrain_model
 from scipy.interpolate import interp1d
@@ -241,30 +242,56 @@ def opt_mintime():
     TODO: ensure the physics is correct -> use Ackermann geometry
     Fix this week
     """
-
-    # define physical constants and vehicle parameters; pass these in in the future
+    
+    bi_veh = bi.Vehicle()
+    
+    # new dictionary convention
+    
     g = 9.81  # [m/s^2]
-    mass = veh.M    # [kg]
-    lf = veh.lf     # front wheelbase length (from COM to front axle)
-    lr = veh.lr     # rear  wheelbase length
+    params = bi_veh.params
+    mass = params["M"]    # [kg]
+    lf = params["lf"]    # front wheelbase length (from COM to front axle)
+    lr = params["lr"]    # rear  wheelbase length
     L = lf + lr     # total wheelbase length
-    wf = veh.wf     # front axle width (distance between centers of wheels)
-    wr = veh.wr     # rear axle width
+    wf = params["wf"]     # front axle width (distance between centers of wheels)
+    wr = params["wr"]    # rear axle width
 
-    Je = veh.Je     # engine moment of inertia TODO -> modify with real data
-    Jw = veh.Jw     # wheel moment of inertia
-    re = veh.re     # effective wheel radius
-    rb = veh.rb     # effective brake radius
-    Iz = veh.Iz     # vehicle moment of inertia about z axis
-
-    # Aero stuff
-    air_density = veh.rho
-    frontal_area = veh.A
+    Je = params["Je"]   # engine moment of inertia TODO -> modify with real data
+    Jw = params["Jw"]    # wheel moment of inertia
+    re = params["re"]    # effective wheel radius
+    rb = params["rb"]    # effective brake radius
+    Iz = params["Iz"]    # vehicle moment of inertia about z axis
+    
     Cl = -0.5       # NEGATIVE Cl means downforce
     Cd = -0.5       # negative Cd means drag
 
-    drag_coeff = 0.5*air_density*Cl*frontal_area
-    df_coeff = - 0.5*air_density*Cd*frontal_area    # "Positive force" = down
+    drag_coeff = 0.5 * params["air_density"] * Cl * params["frontal_area"]
+    df_coeff = - 0.5 * params["air_density"] * Cd * params["frontal_area"]    # "Positive force" = down
+    
+
+    # define physical constants and vehicle parameters; pass these in in the future
+    # g = 9.81  # [m/s^2]
+    # mass = veh.M    # [kg]
+    # lf = veh.lf     # front wheelbase length (from COM to front axle)
+    # lr = veh.lr     # rear  wheelbase length
+    # L = lf + lr     # total wheelbase length
+    # wf = veh.wf     # front axle width (distance between centers of wheels)
+    # wr = veh.wr     # rear axle width
+
+    # Je = veh.Je     # engine moment of inertia TODO -> modify with real data
+    # Jw = veh.Jw     # wheel moment of inertia
+    # re = veh.re     # effective wheel radius
+    # rb = veh.rb     # effective brake radius
+    # Iz = veh.Iz     # vehicle moment of inertia about z axis
+
+    # # Aero stuff
+    # air_density = veh.rho
+    # frontal_area = veh.A
+    # Cl = -0.5       # NEGATIVE Cl means downforce
+    # Cd = -0.5       # negative Cd means drag
+
+    # drag_coeff = 0.5*air_density*Cl*frontal_area
+    # df_coeff = - 0.5*air_density*Cd*frontal_area    # "Positive force" = down
 
     # TODO; WIP implementation 9/30/24
     # Compute aerodynamic and drag forces
@@ -375,10 +402,10 @@ def opt_mintime():
     )  # net torque about z axis
 
     # distribute commanded brake force to the wheels based on our vehicle's brake force distribution
-    F_brake_fr = veh.brake_fr * f_brake  # brake force of front right wheel
-    F_brake_fl = veh.brake_fl * f_brake
-    F_brake_rl = veh.brake_rl * f_brake
-    F_brake_rr = veh.brake_rr * f_brake
+    F_brake_fr = params["brake_fr"] * f_brake  # brake force of front right wheel
+    F_brake_fl = params["brake_fl"] * f_brake
+    F_brake_rl = params["brake_rl"] * f_brake
+    F_brake_rr = params["brake_rr"] * f_brake
 
     # calculate the effective torque experienced by each wheel due to braking
     # this partly determines the rate of change of the angular velocity of each wheel, which in turn is used to compute the slip ratio
@@ -439,12 +466,12 @@ def opt_mintime():
     wrr_dot = (
         sf
         * (-Flrr * re + torque_brake_rr + torque_drive / 2)
-        / (Jw + Je * veh.ratio_final / 2)
+        / (Jw + Je * params["ratio_final"] / 2)
     )  # gear ratio
     wrl_dot = (
         sf
         * (-Flrl * re + torque_brake_rl + torque_drive / 2)
-        / (Jw + Je * veh.ratio_final / 2)
+        / (Jw + Je * params["ratio_final"] / 2)
     )
 
     # If wrr_dot and wrl_dot are positive, we're accelerating. Otherwise, we're decelerating
@@ -472,14 +499,14 @@ def opt_mintime():
     Because we give CasADi normalized vectors, we must normalize these bounds by dividing by each variable's scale x_s
     """
 
-    delta_min = -veh.delta_max / delta_s  # min. steer angle [rad]
-    delta_max = veh.delta_max / delta_s  # max. steer angle [rad]
+    delta_min = -params["delta_max"] / delta_s  # min. steer angle [rad]
+    delta_max = params["delta_max"] / delta_s  # max. steer angle [rad]
 
     f_drive_min = 0.0  # min. longitudinal drive TORQUE [Nm]
-    f_drive_max = veh.drive_max / torque_drive_s  # max. longitudinal drive torque [Nm]
+    f_drive_max = params["drive_max"] / torque_drive_s  # max. longitudinal drive torque [Nm]
 
     # the value of our brake force is always negative
-    f_brake_min = -veh.brake_max / f_brake_s  # min. longitudinal brake force [N]
+    f_brake_min = -params["brake_max"] / f_brake_s  # min. longitudinal brake force [N]
     f_brake_max = 0.0  # max. longitudinal brake force [N]
 
     # The load transfer forces are unbounded; later we constrain them by enforcing no roll / pitch
@@ -494,7 +521,7 @@ def opt_mintime():
     # ------------------------------------------------------------------------------------------------------------------
 
     v_min = 0.0 / v_s  # min. velocity [m/s]
-    v_max = veh.max_velocity / v_s  # max. velocity [m/s]
+    v_max = params["max_velocity"] / v_s  # max. velocity [m/s]
 
     beta_min = -0.25 * np.pi / beta_s  # min. side slip angle [rad]
     beta_max = 0.25 * np.pi / beta_s  # max. side slip angle [rad]
@@ -516,7 +543,7 @@ def opt_mintime():
 
     # for simplicitly, wheels cannot spin backwards, and we cannot have slip ratios > 1
     wheelspeed_min = 0.0
-    wheelspeed_max = 2 * veh.max_velocity / veh.re / wheel_scale
+    wheelspeed_max = 2 * params["max_velocity"] / params["re"] / wheel_scale
     # TODO: explicitly constrain wfr... based on v at each collocation point to ensure slip ratio < 1
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -612,10 +639,10 @@ def opt_mintime():
             0.0,
             0.0,
             0.0,
-            v_max / veh.re,
-            v_max / veh.re,
-            v_max / veh.re,
-            v_max / veh.re,
+            v_max / params["re"],
+            v_max / params["re"],
+            v_max / params["re"],
+            v_max / params["re"],
         ]
     )
     x_opt.append(Xk * x_s)
@@ -644,10 +671,10 @@ def opt_mintime():
                     0.0,
                     0.0,
                     0.0,
-                    vx_guess / veh.re,
-                    vx_guess / veh.re,
-                    vx_guess / veh.re,
-                    vx_guess / veh.re,
+                    vx_guess / params["re"],
+                    vx_guess / params["re"],
+                    vx_guess / params["re"],
+                    vx_guess / params["re"],
                 ]
             )
 
@@ -723,10 +750,10 @@ def opt_mintime():
                 0.0,
                 0.0,
                 0.0,
-                vx_guess / veh.re,
-                vx_guess / veh.re,
-                vx_guess / veh.re,
-                vx_guess / veh.re,
+                vx_guess / params["re"],
+                vx_guess / params["re"],
+                vx_guess / params["re"],
+                vx_guess / params["re"],
             ]
         )
 
@@ -750,12 +777,12 @@ def opt_mintime():
         f_yk = f_y_flk + f_y_frk + f_y_rlk + f_y_rrk
 
         # path constraint: longitudinal wheel load transfer assuming Ky = 0 (no pitch)
-        g.append(Uk[3] * gamma_x_s * (veh.lf + veh.lr) + veh.cg_height * f_xk)
+        g.append(Uk[3] * gamma_x_s * (params["lf"] + params["lr"]) + params["cg_height"] * f_xk)
         lbg.append([0.0])
         ubg.append([0.0])
 
         # path constraint: lateral wheel load transfer assuming Kx = 0 (no roll)
-        g.append(Uk[4] * gamma_y_s * (veh.wf + veh.wr) + veh.cg_height * f_yk)
+        g.append(Uk[4] * gamma_y_s * (params["wf"] + params["wr"]) + params["cg_height"] * f_yk)
         lbg.append([0.0])
         ubg.append([0.0])
 
@@ -786,7 +813,7 @@ def opt_mintime():
         power_cap = 60
         
         # Determine the motor speed in rad/s
-        known_motor_speed = (Xk[7] + Xk[8]) / (2*veh.gear_ratio)
+        known_motor_speed = (Xk[7] + Xk[8]) / (2 * params["gear_ratio"])
         known_motor_speed = known_motor_speed * 30/np.pi # convert to rpm
 
         # Interpolate our motor curve to get the maximum allowed motor torque for this speed

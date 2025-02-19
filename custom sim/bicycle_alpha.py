@@ -52,6 +52,8 @@ class Vehicle:
     def __init__(self):
         # Initialize the vehicle with 30kW SN3 and allow for altered parameters
         self = veh
+        
+        self.params = {"M": veh.M, "lf": veh.lf, "lr": veh.lr, "wf": veh.wf, "wr": veh.wr, "Je": veh.Je, "Jw" : veh.Jw, "re": veh.re, "rb": veh.rb, "Iz": veh.Iz, "air_density": veh.rho, "frontal_area": veh.A, "max_velocity": veh.max_velocity, "brake_fr": veh.brake_fr, "brake_fl": veh.brake_fl, "brake_rr": veh.brake_rr, "brake_rl": veh.brake_rl, "gear_ratio": veh.gear_ratio, "ratio_final": veh.ratio_final, "delta_max": veh.delta_max, "drive_max": veh.drive_max, "brake_max": veh.brake_max, "cg_height": veh.cg_height}
     
 
 class BicycleModel:
