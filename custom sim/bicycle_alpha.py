@@ -10,41 +10,6 @@ import powertrain_model
 from scipy.interpolate import interp1d
 import os
 
-# Define tire constants
-mu = 0.75  # coefficient of friction for tires
-# pacejka model
-Bx = 16
-Cx = 1.58
-Ex = 0.1
-
-By = 13
-Cy = 1.45
-Ey = -0.8
-
-
-# TODO: replace with Nick's tire model later
-# This model can handle slip ratios outside [-1, 1], but we shouldn't get there
-def combined_slip_forces(s, a, Fn):
-    # Get forces pacejka model
-    Fx0 = mu * Fn * ca.sin(Cx * ca.arctan((1 - Ex) * Bx * s + Ex * ca.arctan(Bx * s)))
-    Fy0 = mu * Fn * ca.sin(Cy * ca.arctan((1 - Ey) * By * a + Ey * ca.arctan(By * a)))
-
-    Exa = -Fn / 10000
-    Dxa = 1
-    Cxa = 1
-    Bxa = 13 * ca.cos(ca.arctan(9.7 * s))
-    Gxa = Dxa * ca.cos(Cxa * ca.arctan(Bxa * a - Exa * (Bxa * a - ca.arctan(Bxa * a))))
-
-    Eys = 0.3
-    Dys = 1
-    Cys = 1
-    Bys = 10.62 * ca.cos(ca.arctan(7.8 * a))
-    Gys = Dys * ca.cos(Cys * ca.arctan(Bys * s - Eys * (Bys * s - ca.arctan(Bys * s))))
-
-    Fx = Fx0 * Gxa
-    Fy = Fy0 * Gys
-
-    return Fx, Fy
 
 
 def save_output(data, filename, directory='sims_logs/', metadata=None):
@@ -67,10 +32,10 @@ def save_output(data, filename, directory='sims_logs/', metadata=None):
     
 
     # Write the dataframe to a excel sheet
-    with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:
-        data.to_excel(file_path, sheet_name="data", index=False)
+    with pd.ExcelWriter(file_path, engine="xlsxwriter") as writer:
+        data.to_excel(writer, sheet_name="data", index=False)
         if metadata is not None:
-            metadata.to_excel(file_path, sheet_name="metadata", index=False)
+            metadata.to_excel(writer, sheet_name="metadata", index=False)
 
 
 class Vehicle:
@@ -81,7 +46,10 @@ class Vehicle:
                         "A": veh.A, "max_velocity": veh.max_velocity, "brake_fr": veh.brake_fr, "brake_fl": veh.brake_fl, 
                         "brake_rr": veh.brake_rr, "brake_rl": veh.brake_rl, "gear_ratio": veh.gear_ratio, "ratio_final": veh.ratio_final, 
                         "delta_max": veh.delta_max, "drive_max": veh.drive_max, "brake_max": veh.brake_max, "cg_height": veh.cg_height, "rho": veh.rho, 
-                        "Cl": veh.Cl, "Cd": veh.Cd}
+                        "Cl": veh.Cl, "Cd": veh.Cd, 
+                        # Tire model
+                        "mu": 0.75,  "grip_factor": 1, "Bx": 16, "Cx": 1.58, "Ex": 0.1, "By": 13, "Cy": 1.45, "Ey": -0.8}
+        
     
         # Allow parameter overrides
         self.params.update(kwargs)
@@ -125,6 +93,30 @@ class Vehicle:
         generate_combinations()
         return vehicles
 
+    # This model can handle slip ratios outside [-1, 1], but we shouldn't get there
+    def combined_slip_forces(self, s, a, Fn):
+        # Get forces pacejka model
+        Fx0 = self.params["mu"] * Fn * ca.sin(self.params["Cx"] * ca.arctan((1 - self.params["Ex"]) * self.params["Bx"] * s + self.params["Ex"] * ca.arctan(self.params["Bx"] * s)))
+        Fy0 = self.params["mu"] * Fn * ca.sin(self.params["Cy"] * ca.arctan((1 - self.params["Ey"]) * self.params["By"] * a + self.params["Ey"] * ca.arctan(self.params["By"] * a)))
+
+        Exa = -Fn / 10000
+        Dxa = 1
+        Cxa = 1
+        Bxa = 13 * ca.cos(ca.arctan(9.7 * s))
+        Gxa = Dxa * ca.cos(Cxa * ca.arctan(Bxa * a - Exa * (Bxa * a - ca.arctan(Bxa * a))))
+
+        Eys = 0.3
+        Dys = 1
+        Cys = 1
+        Bys = 10.62 * ca.cos(ca.arctan(7.8 * a))
+        Gys = Dys * ca.cos(Cys * ca.arctan(Bys * s - Eys * (Bys * s - ca.arctan(Bys * s))))
+
+        Fx = Fx0 * Gxa * self.params["grip_factor"]
+        Fy = Fy0 * Gys * self.params["grip_factor"]
+
+        return Fx, Fy
+
+
 
 class BicycleModel:
     def __init__(self, track_file, mesh_size, track_parts):
@@ -142,9 +134,11 @@ class BicycleModel:
     def initialize_vehicle(self):
         self.motor = powertrain_model.motor()
         self.diff = powertrain_model.drexler_differential()
-        self.veh = Vehicle().params
+        self.vehicle = Vehicle()
+        self.veh = self.vehicle.params # save off our vehicle parameters for convenience
 
     def update_vehicle(self, veh):
+        self.vehicle = veh
         self.veh = veh.params
 
     def run(self):
@@ -449,10 +443,10 @@ class BicycleModel:
         sigma_rl = (re * wrl - vlrl) / ca.fabs(vlrl)
 
         # compute wheel grip forces in the wheel frame
-        Flfr, Ftfr = combined_slip_forces(0.0, alpha_fr, F_Nfr)  
-        Flfl, Ftfl = combined_slip_forces(0.0, alpha_fl, F_Nfl)
-        Flrr, Ftrr = combined_slip_forces(0.0, alpha_rr, F_Nrr)
-        Flrl, Ftrl = combined_slip_forces(0.0, alpha_rl, F_Nrl)
+        Flfr, Ftfr = self.vehicle.combined_slip_forces(0.0, alpha_fr, F_Nfr)  
+        Flfl, Ftfl = self.vehicle.combined_slip_forces(0.0, alpha_fl, F_Nfl)
+        Flrr, Ftrr = self.vehicle.combined_slip_forces(0.0, alpha_rr, F_Nrr)
+        Flrl, Ftrl = self.vehicle.combined_slip_forces(0.0, alpha_rl, F_Nrl)
 
         # change wheel forces to body frame
         Fx_fr = Flfr * ca.cos(delta) - Ftfr * ca.sin(delta)
@@ -879,7 +873,8 @@ class BicycleModel:
             power_cap = 60
             
             # Determine the motor speed in rad/s
-            known_motor_speed = (Xk[7] + Xk[8]) / (2*self.veh["gear_ratio"])
+            # TODO not scaled by wheel_scale here???
+            known_motor_speed = (Xk[7] + Xk[8]) / (2*self.veh["gear_ratio"]) * wheel_scale
             known_motor_speed = known_motor_speed * 30/np.pi # convert to rpm
 
             # Interpolate our motor curve to get the maximum allowed motor torque for this speed
@@ -903,7 +898,7 @@ class BicycleModel:
 
             # Constrain our motor torque to be less than the maximum
 
-            g.append(motor_torque_max - Uk[1])
+            g.append(motor_torque_max - Uk[1]*torque_drive_s)
             lbg.append([0.0])
             ubg.append([ca.inf])
 
@@ -1031,8 +1026,8 @@ class BicycleModel:
         # solution for time
         t_opt = np.hstack((0.0, np.cumsum(dt_opt)))
 
-        # solution for energy consumption
-        ec_opt_cum = np.hstack((0.0, np.cumsum(ec_opt))) / 3600.0
+        # solution for energy consumption (kWh)
+        ec_opt_cum = np.hstack((0.0, np.cumsum(ec_opt))) / 3600.0 / 1000
 
         # Convert numpy arrays to pandas DataFrames, making them vertical vectors
         t_opt = np.reshape(t_opt, (-1, 1))  
@@ -1078,10 +1073,11 @@ class BicycleModel:
 
 
 class SweepWrapper:
-    def __init__(self, tracks, param_sweep):
+    def __init__(self, tracks, param_sweep, parts):
         print("Initializing Sweeper")
         self.tracks = tracks
         self.param_sweep = param_sweep
+        self.parts = parts
 
     # calculate the number of points corresponding to event performance using rulebook
     def points_estimate(self, laptimes, energies): 
@@ -1192,11 +1188,6 @@ class SweepWrapper:
                        'skidpad': skidpad_file, 
                        'accel': accel_file}
         
-        parts = {'endurance': 6, 
-                'autoX': 6, 
-                'skidpad': 2, 
-                'accel': 2}
-        
         laptimes = {}
         energies = {}
 
@@ -1206,7 +1197,7 @@ class SweepWrapper:
             # If we're considering this event
             if event in self.tracks:
                 # Create a new solver for the given track and vehicle
-                solver = BicycleModel(basename+file, mesh, parts[event])
+                solver = BicycleModel(basename+file, mesh, self.parts[event])
                 solver.update_vehicle(vehicle)
 
                 laptime, energy = solver.run()
@@ -1265,21 +1256,11 @@ class SweepWrapper:
 
 
         # Export output summary
-        save_output(summary, "sweep_results.xlsx", param_summary)
+        param_df = pd.DataFrame(param_summary)
+        summary_df = pd.DataFrame(summary)
+        print(summary_df)
+        save_output(summary_df, "sweep_results.xlsx", metadata=param_df)
         
-
-def main_test():
-    # Identify which events are relevant to our study    
-    tracks = ['endurance', 'autoX'] #, 'skidpad', 'accel']
-
-    # Identify which parameters we want to sweep over
-    param_sweep = {
-                "M": [250],       # Mass in kg
-                "gear_ratio": [3.0, 3.5]  # Gear ratio
-    }
-
-    sweeper = SweepWrapper(tracks, param_sweep)
-    sweeper.sweep()
 
 
 def run_test():
@@ -1294,6 +1275,40 @@ def run_test():
     # Instantiate and run solver
     solver = BicycleModel(filename, mesh, parts)
     solver.run()
+
+
+def main_test():
+    # Identify which events are relevant to our study    
+    tracks = [
+                'endurance', 
+                'autoX', 
+                'skidpad', 
+                'accel'
+            ]
+
+    # Identify which parameters we want to sweep over
+    param_sweep = {
+                "M": [250],                                     # Mass in kg
+                # "Cl": [-3, -2, -1, -0.3],                       # Coefficient of lift (- for downforce)
+                # "Cd": [-3, -2, -1, -0.3],                       # Coefficient of drag (- for drag)
+                # "grip_factor": [0.7, 0.85, 1],                  # Grip factor (crude estimate of driver "maximizing grip usage")
+                # "re": [0.35],                                   # Effective wheel radius, meters
+                "mu": [0.75]#, 0.9]
+
+    }
+
+    # Divide each track into n segments to improve computation time
+    # Adjust these based on your computer's abilities; higher number = faster, less accurate
+    parts = {
+                'endurance': 6, 
+                'autoX': 6, 
+                'skidpad': 2, 
+                'accel': 1
+            }
+
+    sweeper = SweepWrapper(tracks, param_sweep, parts)
+    sweeper.sweep()
+
 
 
 main_test()

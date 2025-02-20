@@ -166,7 +166,7 @@ if two_track:
     brake_rl = 0.5*0.4
     brake_rr = 0.5*0.4
 
-    Iz      = 5550        # moment of inertiate
+    Iz      = 5550        # zz moment of inertia about cg
     lf      = 1.0         # front wheelbase length
     lr      = 1.2         # rear  wheelbase length
     wf      = 1.7         # rear axle width
