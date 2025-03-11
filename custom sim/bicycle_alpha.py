@@ -143,9 +143,30 @@ class BicycleModel:
 
     def run(self):
         dfs = []
+
+        init_state = None
+        
         for i, part in enumerate(self.parts):
             print('Running part {}: '.format(i))
-            dfs.append(self.opt_mintime(part, self.mesh_size))
+            
+            # Pass init_state so it continues from the last state's final values
+            df_segment = self.opt_mintime(part, self.mesh_size, init_state=init_state)
+            dfs.append(df_segment)
+            
+            # If there's a solution, store the final state for the next segment
+            if not df_segment.empty:
+                last_row = df_segment.iloc[-1]
+                init_state = {
+                    "v": last_row["v"],
+                    "beta": last_row["beta"],
+                    "omega_z": last_row["omega_z"],
+                    "n": last_row["n"],
+                    "xi": last_row["xi"],
+                    "wfr": last_row["wfr"],
+                    "wfl": last_row["wfl"],
+                    "wrl": last_row["wbl"],
+                    "wrr": last_row["wbr"]
+                }
 
         combined_df = pd.concat(dfs, axis=0, ignore_index=True)
 
@@ -160,7 +181,7 @@ class BicycleModel:
         return laptime, energy
 
 
-    def opt_mintime(self, curvatures, mesh_size):
+    def opt_mintime(self, curvatures, mesh_size, init_state=None):
         # ------------------------------------------------------------------------------------------------------------------
         # GET TRACK INFORMATION --------------------------------------------------------------------------------------------
         # ------------------------------------------------------------------------------------------------------------------
@@ -718,6 +739,32 @@ class BicycleModel:
             ]
         )
         x_opt.append(Xk * x_s)
+
+        # If init_state is given, fix the initial state to that
+        if init_state is not None:
+            init_v = init_state["v"] / v_s
+            init_beta = init_state["beta"] / beta_s
+            init_omega_z = init_state["omega_z"] / omega_z_s
+            init_n = init_state["n"] / n_s
+            init_xi = init_state["xi"] / xi_s
+            init_wfr = init_state["wfr"] / wfr_s
+            init_wfl = init_state["wfl"] / wfl_s
+            init_wrl = init_state["wrl"] / wrl_s
+            init_wrr = init_state["wrr"] / wrr_s
+            init_vec = [
+                init_v,
+                init_beta,
+                init_omega_z,
+                init_n,
+                init_xi,
+                init_wfr,
+                init_wfl,
+                init_wrl,
+                init_wrr,
+            ]
+            lbw[-1] = init_vec
+            ubw[-1] = init_vec
+            w0[-1] = init_vec
 
         # loop along the racetrack and formulate path constraints & system dynamics
         for k in range(N):
