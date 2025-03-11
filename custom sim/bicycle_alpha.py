@@ -130,6 +130,9 @@ class BicycleModel:
         print("Initialized track {}".format(trackfile))
         # Break the track into parts splines of curvature
         self.parts = self.tr.split(parts)
+        self.n_max_unnormalized = 4
+        if 'skidpad' in trackfile:
+            self.n_max_unnormalized = 1.2
 
     def initialize_vehicle(self):
         self.motor = powertrain_model.motor()
@@ -632,8 +635,8 @@ class BicycleModel:
         )  # max. relative angle to tangent of reference line [rad]
 
         # an average f1 track is 12m wide -1.5m for the car, -1m buffer on each side
-        n_min = -4 / n_s  # min lateral distance from reference line [m]
-        n_max = 4 / n_s
+        n_min = -self.n_max_unnormalized / n_s  # min lateral distance from reference line [m]
+        n_max = self.n_max_unnormalized / n_s
 
         # for simplicitly, wheels cannot spin backwards, and we cannot have slip ratios > 1
         wheelspeed_min = 0.0
