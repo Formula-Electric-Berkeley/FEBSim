@@ -456,4 +456,3 @@ def highest_v_config():
 This line below finds the configuration with the highest voltage.
 """
 #print(highest_v_config())
-

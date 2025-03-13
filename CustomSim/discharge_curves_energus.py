@@ -27,41 +27,45 @@ def fit_poly(df):
     # Return the fitting polynomial function
     return p
 
-# Load the data
-base_name = 'battery_info\\Molicell\\'
+# Load the data; replace the string with the correct path if the CSV files are not in the same directory
+base_name = 'battery_info/Energus/SonyVTC6_'
 
-
-# Replace the string with the correct path if the CSV files are not in the same directory
-A84 = pd.read_csv(base_name+'0.84A.csv', header=None)
-A10 = pd.read_csv(base_name+'10A.csv', header=None)
-A20 = pd.read_csv(base_name+'20A.csv', header=None)
-A30 = pd.read_csv(base_name+'30A.csv', header=None)
-A42 = pd.read_csv(base_name+'4.2A.csv', header=None)
-
-# Add headers
-A84.columns = ['X', 'Y']
-A10.columns = ['X', 'Y']
-A20.columns = ['X', 'Y']
-A30.columns = ['X', 'Y']
-A42.columns = ['X', 'Y']
 
 # Parameters for outlier removal
 window_size = 30  # Adjust if necessary
 threshold_factor = 3  # Adjust if necessary
 
-# Remove outliers from each dataframe
-A84 = remove_outliers(A84, window_size, threshold_factor)
-A10 = remove_outliers(A10, window_size, threshold_factor)
-A20 = remove_outliers(A20, window_size, threshold_factor)
-A30 = remove_outliers(A30, window_size, threshold_factor)
-A42 = remove_outliers(A42, window_size, threshold_factor)
+# List of the constant current curves we have
+colors = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'magenta', 'pink', 'brown', 'black']
+labels = ['0.5A', '1A', '2A', '3A', '5A', '7A', '10A', '15A', '20A', '30A']
+datasets = []
+
+
+#TODO: 3A is bad
+
+# to extend the fit 
+pull_point = pd.DataFrame({'X': [3.0], 'Y': [2.5]})
+
+for i, label in enumerate(labels):
+    Ai = pd.read_csv(base_name+'{}.csv'.format(label), header=None)
+
+    # Add headers; the x 1-SOC in amp hours, y is voltage of cell
+    Ai.columns = ['X', 'Y']
+
+    # Remove outliers from each dataframe
+    Ai = remove_outliers(Ai, window_size, threshold_factor)
+
+    # Appending the new point
+    Ai = pd.concat([Ai, pull_point], ignore_index=True)
+
+    Ai['X'] = Ai['X'] * 1000 # convert to mAh
+
+    
+
+    datasets.append(Ai)
 
 
 plt.figure(figsize=(10, 8))
-datasets = [A84, A42, A10, A20, A30]
-colors = ['red', 'green', 'blue', 'black', 'magenta']
-labels = ['0.84A', '4.2A', '10A', '20A', '30A']
-
 
 
 def plot():
@@ -73,16 +77,19 @@ def plot():
         plt.scatter(df['X'], df['Y'], label=f'Original {label}', color=color, alpha=0.5)
 
         # Plotting the fit
-        X_fit = np.linspace(df['X'].min(), df['X'].max(), 500)
+        
+        max_x = 3000 # df['X'].max()
+
+        X_fit = np.linspace(df['X'].min(), max_x, 500)
         Y_fit = p(X_fit)
         plt.plot(X_fit, Y_fit, label=f'Fit {label}', color=color)
 
     # Set specific parameters for the y-axis and x-axis
-    plt.ylim(0.0, 5.0)  # Set the limits for the y-axis
-    plt.yticks(np.arange(0.0, 5.1, 1.0))  # Set the ticks on the y-axis
+    plt.ylim(2.8, 4.2)  # Set the limits for the y-axis
+    plt.yticks(np.arange(0, 4.3, 0.2))  # Set the ticks on the y-axis
 
-    plt.xlim(0, 4400)  # Set the limits for the x-axis
-    plt.xticks(np.arange(0, 4401, 400))  # Set the ticks on the x-axis
+    plt.xlim(0, 3250)  # Set the limits for the x-axis
+    plt.xticks(np.arange(0, 3350, 250))  # Set the ticks on the x-axis
 
     plt.title('Battery Discharge Curves with Polynomial Fitting')
     plt.xlabel('Capacity (mAh)')
