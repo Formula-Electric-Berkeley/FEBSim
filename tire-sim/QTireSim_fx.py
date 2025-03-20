@@ -35,15 +35,17 @@ PACEJKA_PARAMS_NAMES = ["B", "C", "D", "E", "F"]
 PACEJKA_PARAMS_GUESS = [-0.1, 0.1, 2000, 0.3, 0]  # Update as needed
 PACEJKA_PARAM_FIT_FNS = [B_fit, C_fit, D_fit, E_fit]
 
-# RUN_NUM = 9 
-SELECTED_RUNS = [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72]
+# RUN_NUM = 9
+# SELECTED_RUNS = [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72]
+ 
+SELECTED_RUNS = [68, 71, 72, 73]
 
 def get_run_data(selected_runs : List[int]) -> pd.DataFrame:
     metric_data = pd.DataFrame()
 
     for rn in selected_runs:
         # Import the data
-        metric_datum = pd.read_csv(f'./RunData_DriveBrake_ASCII_SI_Round9/B2356run{rn}.dat', skiprows=1, sep='\t')
+        metric_datum = pd.read_csv(f'./RawData_DriveBrake_ASCII_SI_Round9/B2356raw{rn}.dat', skiprows=1, sep='\t')
 
         # Rename columns to have value and units, and remove the previous row for units
         metric_datum.rename(columns={col: f"{col} {metric_datum[col][0]}" for col in metric_datum.columns}, inplace=True)
