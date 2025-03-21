@@ -6,9 +6,12 @@ import numpy as np
 from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score
 import plotly.graph_objects as go # Nick did this, idk if it's standard but it's cute cause then you get go.Figure()
+# don't think it's standard but it's funny
 from plotly.subplots import make_subplots
+import QTireSim as fy
 
-# Define the Pacejka Magic Formula for lateral force (FY) with five coefficients
+# Define the Pacejka Magic Formula with five coefficients
+# slip angle for lateral (Fy), slip ratio for longitudinal (Fx)
 def pacejka_model(sr, B, C, D, E, F):
     return D * np.sin(C * np.arctan(B * sr - E * (B * sr - np.arctan(B * sr))) + F)
 
@@ -35,9 +38,7 @@ PACEJKA_PARAMS_NAMES = ["B", "C", "D", "E", "F"]
 PACEJKA_PARAMS_GUESS = [-0.1, 0.1, 2000, 0.3, 0]  # Update as needed
 PACEJKA_PARAM_FIT_FNS = [B_fit, C_fit, D_fit, E_fit]
 
-# RUN_NUM = 9
-# SELECTED_RUNS = [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72]
- 
+ # runs w/ 18.0X6.0 tire data
 SELECTED_RUNS = [68, 71, 72, 73]
 
 def get_run_data(selected_runs : List[int]) -> pd.DataFrame:
@@ -63,18 +64,21 @@ def get_run_data(selected_runs : List[int]) -> pd.DataFrame:
         # print(metric_datum.columns)
         # print(metric_datum)
 
-        # IQR filter Slip Angle and Fy
+        # IQR filter Slip ratio and Fx
         # print(metric_datum.columns)
 
         Q1 = metric_datum[['SR SAE', 'FX N']].quantile(0.25)
         Q3 = metric_datum[['SR SAE', 'FX N']].quantile(0.75)
         IQR = Q3 - Q1
+        
 
-        # metric_datum = metric_datum[~((metric_datum[['SA deg', 'FY N']] < (Q1 - 1.5 * IQR)) | (metric_datum[['SA deg', 'FY N']] > (Q3 + 1.5 * IQR))).any(axis=1)]
+        # filter outliers
+        # metric_datum = metric_datum[~((metric_datum[['SR SAE', 'FX N']] < (Q1 - 1.5 * IQR)) | (metric_datum[['SR SAE', 'FX N']] > (Q3 + 1.5 * IQR))).any(axis=1)]
 
         metric_data = pd.concat([metric_data, metric_datum])
         print(len(metric_datum))
 
+    print(metric_data)
     return metric_data
 
 def get_bins(metric_data : pd.DataFrame) -> List[tuple[int, int]]:
@@ -101,14 +105,14 @@ def Fz_bin_data(metric_data : pd.DataFrame, Fz_bins : List[List[int]]) -> List[p
         lb = Fz_bin[0]
         ub = Fz_bin[1]
 
-        data_binned = metric_data[(lb <= metric_data["FZ N"]) & (metric_data["FZ N"] < ub)][["SA deg", "FY N", "FZ N"]]
+        data_binned = metric_data[(lb <= metric_data["FZ N"]) & (metric_data["FZ N"] < ub)][["SR SAE", "FX N", "FZ N"]]
 
         metric_data_binned.append(data_binned)
     
     return metric_data_binned
 
 def get_pacejka_params(metric_data : pd.DataFrame) -> tuple[float, float, float, float]:
-    params_optimal, _ = curve_fit(pacejka_model, metric_data["SA deg"], metric_data["FY N"], p0=PACEJKA_PARAMS_GUESS, maxfev=100000)
+    params_optimal, _ = curve_fit(pacejka_model, metric_data["SR SAE"], metric_data["FX N"], p0=PACEJKA_PARAMS_GUESS, maxfev=100000)
     return params_optimal
 
 def single_fig_color_gradient(metric_data : pd.DataFrame) -> go.Figure:
@@ -126,16 +130,16 @@ def single_fig_color_gradient(metric_data : pd.DataFrame) -> go.Figure:
     return fig
 
 def bin_figs(data_binned : List[pd.DataFrame], params_binned : List[tuple[float, float, float, float ,float]], Fz_bins : List[tuple[float, float]]) -> go.Figure:
-    fig = make_subplots(rows=GRAPH_ROWS, cols=GRAPH_COLS, subplot_titles=[f"Fy over SA for Fz in bin [{lb:.2f}, {ub:.2f})" for lb, ub in Fz_bins])
+    fig = make_subplots(rows=GRAPH_ROWS, cols=GRAPH_COLS, subplot_titles=[f"Fx over SR for Fz in bin [{lb:.2f}, {ub:.2f})" for lb, ub in Fz_bins])
 
     for i in range(FZ_BIN_COUNT):
         data_bin = data_binned[i]
-        graph_domain = np.linspace(min(data_bin["SA deg"]), max(data_bin["SA deg"]), 500)
+        graph_domain = np.linspace(min(data_bin["SR SAE"]), max(data_bin["SR SAE"]), 500)
 
         # Draw scatterplot of data
         fig.add_trace(
-            go.Scatter( x=data_bin["SA deg"], 
-                        y=data_bin["FY N"], 
+            go.Scatter( x=data_bin["SR SAE"], 
+                        y=data_bin["FX N"], 
                         mode="markers", 
                         # marker=dict(
                         #     color=data_bin["FZ N"], 
@@ -180,42 +184,56 @@ def coefficient_figs(params_binned : List[tuple[float, float, float, float, floa
             Fz_domain = np.linspace(Fz_medians[0], Fz_medians[-1], 50)
             fig.add_trace(go.Scatter(x=Fz_domain, y=PACEJKA_PARAM_FIT_FNS[i](Fz_domain, *coefficients)), row = i // 3 + 1, col = i % 3 + 1)
 
-    fig.update_layout(title_text=f"Binned Fy over SA for Fz bins on runs {SELECTED_RUNS}")
+    fig.update_layout(title_text=f"Binned Fx over SR for Fz bins on runs {SELECTED_RUNS}")
 
     return fig
 
+def add_16in_info(data):
+    
+    # calculate slip ratios for 16in tire from 18in data
+    R_18, R_16 = 9, 8
+    data["SR (16in)"] = data["SR SAE"] * (R_18 / R_16)
+        
+    
+    k_y = max(fy.all_data["FY N"]) / max(data["FY N"])
+    data["FX N (16in)"] = k_y * data["FX N"]
+    
+    return data
+
 all_data = get_run_data(SELECTED_RUNS)
 # all_data = all_data[(all_data["FZ N"] > -1000) & (all_data["FZ N"] < -350)]
+all_data = add_16in_info(all_data)
 
-# fig = single_fig_color_gradient(all_data)
+fig = single_fig_color_gradient(all_data)
 
-print("MIN:", all_data["FZ N"].min())
+# print("MIN:", all_data["FZ N"].min())
 
 fig = go.Figure()
-# fig.add_trace(go.Scatter(
-#     x=all_data[(all_data["FZ N"] > -350) & (all_data["FZ N"] < -0)]["SR SAE"],
-#     y=all_data[(all_data["FZ N"] > -350) & (all_data["FZ N"] < -0)]["FX N"],
-#     # opacity=0.5,
-#     mode="markers",
-# ))
-# fig.add_trace(go.Scatter(
-#     x=all_data[(all_data["FZ N"] > -800) & (all_data["FZ N"] < -350)]["SR SAE"],
-#     y=all_data[(all_data["FZ N"] > -800) & (all_data["FZ N"] < -350)]["FX N"],
-#     # opacity=0.5,
-#     mode="markers",
-# ))
 fig.add_trace(go.Scatter(
-    x=all_data[(all_data["FZ N"] > -1000) & (all_data["FZ N"] < -800)]["SR SAE"],
-    y=all_data[(all_data["FZ N"] > -1000) & (all_data["FZ N"] < -800)]["FX N"],
+    x=all_data[(all_data["FZ N"] > -350) & (all_data["FZ N"] < -0)]["SR (16in)"],
+    y=all_data[(all_data["FZ N"] > -350) & (all_data["FZ N"] < -0)]["FX N (16in)"],
+    # opacity=0.5,
+    mode="markers",
+))
+fig.add_trace(go.Scatter(
+    x=all_data[(all_data["FZ N"] > -800) & (all_data["FZ N"] < -350)]["SR (16in)"],
+    y=all_data[(all_data["FZ N"] > -800) & (all_data["FZ N"] < -350)]["FX N (16in)"],
+    # opacity=0.5,
+    mode="markers",
+))
+fig.add_trace(go.Scatter(
+    x=all_data[(all_data["FZ N"] > -1000) & (all_data["FZ N"] < -800)]["SR (16in)"],
+    y=all_data[(all_data["FZ N"] > -1000) & (all_data["FZ N"] < -800)]["FX N (16in)"],
     # opacity=0.5,
     mode="markers", 
 ))
-# fig.add_trace(go.Scatter(
-#     x=all_data[(all_data["FZ N"] > -1500) & (all_data["FZ N"] < -1000)]["SR SAE"],
-#     y=all_data[(all_data["FZ N"] > -1500) & (all_data["FZ N"] < -1000)]["FX N"],
-#     opacity=0.5,
-#     mode="markers", 
-# ))
+fig.add_trace(go.Scatter(
+    x=all_data[(all_data["FZ N"] > -1500) & (all_data["FZ N"] < -1000)]["SR (16in)"],
+    y=all_data[(all_data["FZ N"] > -1500) & (all_data["FZ N"] < -1000)]["FX N (16in)"],
+    opacity=0.5,
+    mode="markers", 
+))
+
 
 fig.write_html("QVis.html")
 
@@ -230,7 +248,7 @@ fig.write_html("QVis.html")
 #     print(f"Bin {i}")
 #     print("Params:", params_binned[i])
 
-#     r2_val = r2_score(all_data_binned[i]["FY N"], pacejka_model(all_data_binned[i]["SA deg"], *params_binned[i]))
+#     r2_val = r2_score(all_data_binned[i]["FX N"], pacejka_model(all_data_binned[i]["SR SAE"], *params_binned[i]))
 #     print("R2:", r2_val)
 
 
