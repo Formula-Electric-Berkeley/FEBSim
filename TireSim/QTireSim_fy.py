@@ -8,23 +8,34 @@ from sklearn.metrics import r2_score
 import plotly.graph_objects as go # Nick did this, idk if it's standard but it's cute cause then you get go.Figure()
 from plotly.subplots import make_subplots
 
+def format_float(x, sig_digits=3):
+    # Round to 3 significant digits
+    rounded = f"{x:5G}"
+    return str(float(rounded))
+
 # Define the Pacejka Magic Formula for lateral force (FY) with five coefficients
 def pacejka_model(alpha, B, C, D, E, F):
     return D * np.sin(C * np.arctan(B * alpha - E * (B * alpha - np.arctan(B * alpha))) + F)
 
-def B_fit(Fz, B1, B2):
-    return B1 + Fz * B2
+def quad_fit(Fz, a0, a1, a2):
+    return a0 + a1 * Fz + a2 * (Fz ** 2)
 
-def C_fit(Fz, C1, C2):
-    return C1 + Fz * C2
+def lin_fit(Fz, a0, a1):
+    return a0 + Fz * a1
 
-def D_fit(Fz, D1, D2):
-    return (D1 * Fz) + D2 * (Fz ** 2)
+def exp_fit(Fz, a0, a1, a2):
+    return a0 + a1 * (np.e ** (a2 * Fz))
 
-def E_fit(Fz, E1, E2):
-    return E1 + Fz * E2
+def fit_print(ftype, *params):
+    params = np.vectorize(format_float)(params)
+    if ftype == quad_fit:
+        return f"{params[0]} + {params[1]} F_z + {params[2]} F_z^2"
+    elif ftype == lin_fit:
+        return f"{params[0]} + {params[1]} F_z"
+    else:
+        return f"{params[0]} + {params[1]} exp({params[2]} F_z)"
 
-np.set_printoptions(suppress=True) # Disable scientific notation
+np.set_printoptions(suppress=True, precision=5) # Disable scientific notation
 
 FZ_BIN_COUNT = 5
 BIN_COLORS = ["red", "green", "blue", "purple", "pink", "orange", "black", "gray"]
@@ -33,7 +44,15 @@ GRAPH_ROWS = 2
 
 PACEJKA_PARAMS_NAMES = ["B", "C", "D", "E", "F"]
 PACEJKA_PARAMS_GUESS = [-0.1, 0.1, 2000, 0.3, 0]  # Update as needed
-PACEJKA_PARAM_FIT_FNS = [B_fit, C_fit, D_fit, E_fit]
+
+PACEJKA_PARAM_FIT_FNS = [quad_fit, quad_fit, lin_fit, exp_fit, quad_fit]
+PACEJKA_PARAM_FIT_GUESS = [
+    [-0.37, -0.00045, -0.0000002],
+    [0, 0, 0],
+    [0, 0],
+    [0, 0, 0],
+    [0, 0, 0]
+]
 
 # RUN_NUM = 9 # First nine runs are all using our desired 16 x 7.5 tires
 SELECTED_RUNS = [4, 5, 6, 8, 9]
@@ -91,15 +110,17 @@ def get_bins(metric_data : pd.DataFrame) -> List[tuple[int, int]]:
     return Fz_bins
 
 def Fz_bin_data(metric_data : pd.DataFrame, Fz_bins : List[List[int]]) -> List[pd.DataFrame]:
-    metric_data_binned = []
+    metric_data_binned = np.zeros(len(Fz_bins), dtype=pd.DataFrame)
     # Sort data into bins, and find coefficients
-    for Fz_bin in Fz_bins:
+    for i in range(len(Fz_bins)):
+        Fz_bin = Fz_bins[i]
+
         lb = Fz_bin[0]
         ub = Fz_bin[1]
 
         data_binned = metric_data[(lb <= metric_data["FZ N"]) & (metric_data["FZ N"] < ub)][["SA deg", "FY N", "FZ N"]]
 
-        metric_data_binned.append(data_binned)
+        metric_data_binned[i] = data_binned
     
     return metric_data_binned
 
@@ -164,21 +185,49 @@ def coefficient_figs(params_binned : List[tuple[float, float, float, float, floa
     fig = make_subplots(rows=2, cols=3, subplot_titles=[f"{PACEJKA_PARAMS_NAMES[i]} value over load force bins" for i in range(5)])
 
     for i in range(5):
+        values_for_this_param = params_binned[:,i] # ith column
         Fz_medians = [(ub + lb) / 2 for lb, ub in Fz_bins]
 
-        fig.add_trace(go.Scatter(x=Fz_medians, y=[params_binned[j][i] for j in range(FZ_BIN_COUNT)]), row = i // 3 + 1, col = i % 3 + 1)
+        fig.add_trace(go.Scatter(x=Fz_medians, y=values_for_this_param), row = i // 3 + 1, col = i % 3 + 1)
         fig.update_xaxes(title_text=f"Fz Bin Median", row = i // 3 + 1, col = i % 3 + 1)
         fig.update_yaxes(title_text=f"Value of param {PACEJKA_PARAMS_NAMES[i]}", row = i // 3 + 1, col = i % 3 + 1)
 
-        # Fit param data for the Pacejka model coefficients, we don't have a fit fn for F not sure why
-        if i < 4:
-            coefficients, _ = curve_fit(PACEJKA_PARAM_FIT_FNS[i], Fz_medians, [params_binned[j][i] for j in range(FZ_BIN_COUNT)])
-            Fz_domain = np.linspace(Fz_medians[0], Fz_medians[-1], 50)
-            fig.add_trace(go.Scatter(x=Fz_domain, y=PACEJKA_PARAM_FIT_FNS[i](Fz_domain, *coefficients)), row = i // 3 + 1, col = i % 3 + 1)
+        coefficients, _ = curve_fit(PACEJKA_PARAM_FIT_FNS[i], Fz_medians, values_for_this_param, maxfev=150000, p0=PACEJKA_PARAM_FIT_GUESS[i])
+        Fz_domain = np.linspace(Fz_medians[0], Fz_medians[-1], 50)
+        fig.add_trace(go.Scatter(x=Fz_domain, y=PACEJKA_PARAM_FIT_FNS[i](Fz_domain, *coefficients)), row = i // 3 + 1, col = i % 3 + 1)
 
-    fig.update_layout(title_text=f"Binned Fy over SA for Fz bins on runs {SELECTED_RUNS}")
+        print(f"Pacejka params for {PACEJKA_PARAMS_NAMES[i]}:", coefficients)
+        print(fit_print(PACEJKA_PARAM_FIT_FNS[i], *coefficients))
+
+    fig.update_layout(title_text=f"Values for Pacejka params over Fz {SELECTED_RUNS}")
 
     return fig
+
+def find_radius_conversion():
+    starting_radius = 18 # in
+    target_radius = 16 # in
+
+    starting_radius_data = get_run_data([68, 71, 72, 73])
+    target_radius_data = get_run_data([4, 5, 6, 8, 9])
+
+all_data = get_run_data(SELECTED_RUNS)
+print(all_data["FY N"].max())
+
+fig = go.Figure()
+fig.add_trace(
+        go.Scatter(
+            x=all_data["SA deg"],
+            y=all_data["FY N"],
+            mode="markers", 
+            marker=dict(color=all_data["FZ N"], colorscale="Viridis", showscale=True, colorbar=dict(title="Load Force (N)")),
+        )
+    )
+
+# fig.update_layout(title_text=f"Fy (N) over SA (deg) for all quality 16x7.5 cornering rundata")
+
+# fig.write_html("QVis.html")
+
+# sys.exit(0)
 
 all_data = get_run_data(SELECTED_RUNS)
 all_data = all_data[all_data["FZ N"] < -150]
@@ -186,7 +235,7 @@ all_data = all_data[all_data["FZ N"] < -150]
 Fz_bins = [(-1300, -1000), (-1000, -750), (-750, -500), (-500, -300), (-300, -150)] # Empirically found by looking at graph.
 all_data_binned = Fz_bin_data(all_data, Fz_bins)
 
-params_binned = [get_pacejka_params(data_bin) for data_bin in all_data_binned]
+params_binned = np.array(list(map(get_pacejka_params, all_data_binned)))
 
 # new_fig = single_fig_color_gradient(all_data[all_data["FZ N"] < -1000])
 # new_fig.update_layout(
@@ -201,12 +250,12 @@ params_binned = [get_pacejka_params(data_bin) for data_bin in all_data_binned]
 # new_fig.write_html("QVis.html")
 
 for i in range(FZ_BIN_COUNT):
-    print(f"Bin {i}")
-    print("Params:", params_binned[i])
+    print(f"Pacejka params for bin {i}:", params_binned[i])
 
     r2_val = r2_score(all_data_binned[i]["FY N"], pacejka_model(all_data_binned[i]["SA deg"], *params_binned[i]))
     print("R2:", r2_val)
 
+print(params_binned)
 
 new_fig = coefficient_figs(params_binned, Fz_bins)
 new_fig.write_html("QVis.html")
