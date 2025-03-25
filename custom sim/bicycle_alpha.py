@@ -93,28 +93,31 @@ class Vehicle:
         generate_combinations()
         return vehicles
 
-    # This model can handle slip ratios outside [-1, 1], but we shouldn't get there
-    def combined_slip_forces(self, s, a, Fn):
+    def combined_slip_forces(self, SL, SA, Fn):
         # Get forces pacejka model
-        Fx0 = self.params["mu"] * Fn * ca.sin(self.params["Cx"] * ca.arctan((1 - self.params["Ex"]) * self.params["Bx"] * s + self.params["Ex"] * ca.arctan(self.params["Bx"] * s)))
-        Fy0 = self.params["mu"] * Fn * ca.sin(self.params["Cy"] * ca.arctan((1 - self.params["Ey"]) * self.params["By"] * a + self.params["Ey"] * ca.arctan(self.params["By"] * a)))
+        
+        By, Cy, Dy, Ey, Fy = [
+            -0.34876850845497015 - 0.00034276883261057686 * Fn - 0.00000013247032127260662 * (Fn ** 2),
+            0.5509222176106313 - 0.002443688073927094 * Fn - .0000012320536839299613 * (Fn ** 2),
+            338.39870577325456 - 1.9769442425898722 * Fn,
+            0.3553895949382016 + 31.244897244705058 * ca.exp(0.016405921135532898 * Fn),
+            -0.0233809460004577 - 0.00017739222796836902 * Fn - 0.00000012122598706268264 * (Fn ** 2)
+        ]
 
-        Exa = -Fn / 10000
-        Dxa = 1
-        Cxa = 1
-        Bxa = 13 * ca.cos(ca.arctan(9.7 * s))
-        Gxa = Dxa * ca.cos(Cxa * ca.arctan(Bxa * a - Exa * (Bxa * a - ca.arctan(Bxa * a))))
+        ForceY = Dy * ca.sin(Cy * ca.atan(By * SA - Ey * (By * SA - ca.atan(By * SA))) + Fy)
 
-        Eys = 0.3
-        Dys = 1
-        Cys = 1
-        Bys = 10.62 * ca.cos(ca.arctan(7.8 * a))
-        Gys = Dys * ca.cos(Cys * ca.arctan(Bys * s - Eys * (Bys * s - ca.arctan(Bys * s))))
+        Bx, Cx, Dx, Ex, Fx = [
+            -17.3662 - 9.50547 * ca.exp(0.00226287 * Fn),
+            -0.00127868 + 0.0000135334 * Fn + 0.00000000486905 * (Fn ** 2),
+            43690.6 - 173.535 * Fn - 0.0708504 * (Fn ** 2),
+            -1.42217 + 0.0015213 * Fn,
+            0.000176214 - 0.000000274311 * Fn
+        ]
 
-        Fx = Fx0 * Gxa * self.params["grip_factor"]
-        Fy = Fy0 * Gys * self.params["grip_factor"]
+        ForceX = Dx * ca.sin(Cx * ca.atan(Bx * SL - Ex * (Bx * SL - ca.atan(Bx * SL))) + Fx)
 
-        return Fx, Fy
+
+        return ForceX, ForceY
 
 
 
@@ -1338,12 +1341,12 @@ def main_test():
 
     # Identify which parameters we want to sweep over
     param_sweep = {
-                "M": [250],                                     # Mass in kg
+                "M": [310],                                     # Mass in kg
                 # "Cl": [-3, -2, -1, -0.3],                       # Coefficient of lift (- for downforce)
                 # "Cd": [-3, -2, -1, -0.3],                       # Coefficient of drag (- for drag)
                 # "grip_factor": [0.7, 0.85, 1],                  # Grip factor (crude estimate of driver "maximizing grip usage")
                 # "re": [0.35],                                   # Effective wheel radius, meters
-                "mu": [0.75]#, 0.9]
+                # "mu": [0.75]#, 0.9]
 
     }
 
