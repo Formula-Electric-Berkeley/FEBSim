@@ -94,6 +94,10 @@ class Vehicle:
         return vehicles
 
     def combined_slip_forces(self, SL, SA, Fn):
+        # Convert radians to angles
+        SA = (SA * 180) / np.pi
+        SL = (SL * 180) / np.pi
+        
         # Get forces pacejka model
         
         By, Cy, Dy, Ey, Fy = [
@@ -115,7 +119,6 @@ class Vehicle:
         ]
 
         ForceX = Dx * ca.sin(Cx * ca.atan(Bx * SL - Ex * (Bx * SL - ca.atan(Bx * SL))) + Fx)
-
 
         return ForceX, ForceY
 
@@ -1333,10 +1336,10 @@ def run_test():
 def main_test():
     # Identify which events are relevant to our study    
     tracks = [
-                'endurance', 
-                'autoX', 
+                # 'endurance', 
+                # 'autoX', 
                 'skidpad', 
-                'accel'
+                # 'accel'
             ]
 
     # Identify which parameters we want to sweep over
