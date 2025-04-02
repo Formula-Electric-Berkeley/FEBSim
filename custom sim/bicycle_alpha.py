@@ -120,6 +120,9 @@ class Vehicle:
 
         ForceX = Dx * ca.sin(Cx * ca.atan(Bx * SL - Ex * (Bx * SL - ca.atan(Bx * SL))) + Fx)
 
+        ForceX = ForceX*self.params["grip_factor"]
+        ForceY = ForceY*self.params["grip_factor"]
+
         return ForceX, ForceY
 
 
@@ -402,33 +405,18 @@ class BicycleModel:
         # Also assumes 0.5 COP right now; this can change later
         Fx_aero_drag = drag_coeff * v * v
         Fz_aero_down = df_coeff * v * v          
-
-        # TODO; fix roll and dynamic load transfer calculations
-        '''
-        f_xroll_fl = 0.5 * tire["c_roll"] * mass * g * veh["wheelbase_rear"] / veh["wheelbase"]
-        f_xroll_fr = 0.5 * tire["c_roll"] * mass * g * veh["wheelbase_rear"] / veh["wheelbase"]
-        f_xroll_rl = 0.5 * tire["c_roll"] * mass * g * veh["wheelbase_front"] / veh["wheelbase"]
-        f_xroll_rr = 0.5 * tire["c_roll"] * mass * g * veh["wheelbase_front"] / veh["wheelbase"]
-        f_xroll = tire["c_roll"] * mass * g
-
-        f_zdyn_fl = (-0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xdrag - f_xroll)
-                    - veh["k_roll"] * gamma_y)
-        f_zdyn_fr = (-0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xdrag - f_xroll)
-                    + veh["k_roll"] * gamma_y)
-        f_zdyn_rl = (0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xdrag - f_xroll)
-                    - (1.0 - veh["k_roll"]) * gamma_y)
-        f_zdyn_rr = (0.5 * veh["cog_z"] / veh["wheelbase"] * (f_drive + f_brake - f_xdrag - f_xroll)
-                    + (1.0 - veh["k_roll"]) * gamma_y)
         
-        '''
-        
-
         # compute normal forces at each wheel, assumes wf roughly equals wr
         # this will be used by our tire model to compute grip forces at each wheel
-        F_Nfr_weight = (mass * g * lr) / (L * 2) + gamma_x - gamma_y
-        F_Nfl_weight = (mass * g * lr) / (L * 2) + gamma_x + gamma_y
-        F_Nrr_weight = (mass * g * lf) / (L * 2) - gamma_x - gamma_y
-        F_Nrl_weight = (mass * g * lf) / (L * 2) - gamma_x + gamma_y
+        # 50/50 left-right wb; forward-back wb dependent on lf, lr
+
+        k_roll = 0.5        # roll balance: how is gamma_y distributed between front and back
+        k_pitch = 0.5       # how is longitudinal load difference distributed between left and right 
+
+        F_Nfr_weight = (mass * g * lr) / (L * 2) + (1-k_pitch)*gamma_x - k_roll*gamma_y
+        F_Nfl_weight = (mass * g * lr) / (L * 2) + k_pitch*gamma_x + k_roll*gamma_y
+        F_Nrr_weight = (mass * g * lf) / (L * 2) - (1-k_pitch)*gamma_x - (1-k_roll)*gamma_y
+        F_Nrl_weight = (mass * g * lf) / (L * 2) - k_pitch*gamma_x + (1-k_roll)*gamma_y
 
         F_Nfr = F_Nfr_weight + Fz_aero_down*0.25
         F_Nfl = F_Nfl_weight + Fz_aero_down*0.25
@@ -626,8 +614,8 @@ class BicycleModel:
         v_min = 0.0 / v_s  # min. velocity [m/s]
         v_max = self.veh["max_velocity"] / v_s  # max. velocity [m/s]
 
-        beta_min = -0.25 * np.pi / beta_s  # min. side slip angle [rad]
-        beta_max = 0.25 * np.pi / beta_s  # max. side slip angle [rad]
+        beta_min = -0.5 * np.pi / beta_s  # min. side slip angle [rad]
+        beta_max = 0.5 * np.pi / beta_s  # max. side slip angle [rad]
 
         omega_z_min = -0.5 * np.pi / omega_z_s  # min. yaw rate [rad/s]
         omega_z_max = 0.5 * np.pi / omega_z_s  # max. yaw rate [rad/s]
@@ -677,6 +665,15 @@ class BicycleModel:
             [Fy_fl, Fy_fr, Fy_rl, Fy_rr],
             ["x", "u"],
             ["Fyfl", "Fyfr", "Fyrl", "Fyrr"],
+        )
+
+        # vertical tire forces [N]
+        f_fz = ca.Function(
+            'f_fz', 
+            [x, u], 
+            [F_Nfl, F_Nfr, F_Nrl, F_Nrr],
+            ['x', 'u'], 
+            ['f_z_fl', 'f_z_fr', 'f_z_rl', 'f_z_rr']
         )
 
 
@@ -906,20 +903,41 @@ class BicycleModel:
             f_xk = f_x_flk + f_x_frk + f_x_rlk + f_x_rrk
             f_yk = f_y_flk + f_y_frk + f_y_rlk + f_y_rrk
 
+            f_z_flk, f_z_frk, f_z_rlk, f_z_rrk = f_fz(Xk, Uk)
+
+            roll_relaxation = 1e-5
+            pitch_relaxation = 1e-5
+
             # path constraint: longitudinal wheel load transfer assuming Ky = 0 (no pitch)
-            roll_relaxation = 1e-7
-            pitch_relaxation = 1e-7
             g.append(Uk[3] * gamma_x_s * (self.veh["lf"] + self.veh["lr"]) + self.veh["cg_height"] * f_xk)
             lbg.append([-pitch_relaxation])
             ubg.append([pitch_relaxation])
+            # traction forces act at the road
+            # gamma is a force, not a moment; k_R*gamma_y acts up (down) at front left and down (up) at front right 
+            # thus we have 2 additive contributions of k_R*gamma_y to the moment, each with r = wf/2, for the front 
+            # for pitch, we have 
+            # TODO - our formulation here requires k_roll = 0.5; otherwise uneven gamma_y on front v.s. back contributes to Ky?
+            # for pitch, we have 2 additive contributions of k_P*gamma_x on the left side, with r = lf and r = lr
+
 
             # path constraint: lateral wheel load transfer assuming Kx = 0 (no roll)
-            g.append(Uk[4] * gamma_y_s * (self.veh["wf"] + self.veh["wr"]) + self.veh["cg_height"] * f_yk)
+            g.append(Uk[4] * gamma_y_s * (k_roll*self.veh["wf"] + (1-k_roll)*self.veh["wr"]) + self.veh["cg_height"] * f_yk)
             lbg.append([-roll_relaxation])
             ubg.append([roll_relaxation])
 
+            # get constant friction coefficient
+            mue_fl = self.veh["mu"]
+            mue_fr = self.veh["mu"]
+            mue_rl = self.veh["mu"]
+            mue_rr = self.veh["mu"]
 
-            # CHANGES: regularization, relaxed roll and pitch; added final constraint
+            # path constraint: Kamm's Circle for each wheel
+            g.append(((f_x_flk / (mue_fl * f_z_flk)) ** 2 + (f_y_flk / (mue_fl * f_z_flk)) ** 2))
+            g.append(((f_x_frk / (mue_fr * f_z_frk)) ** 2 + (f_y_frk / (mue_fr * f_z_frk)) ** 2))
+            g.append(((f_x_rlk / (mue_rl * f_z_rlk)) ** 2 + (f_y_rlk / (mue_rl * f_z_rlk)) ** 2))
+            g.append(((f_x_rrk / (mue_rr * f_z_rrk)) ** 2 + (f_y_rrk / (mue_rr * f_z_rrk)) ** 2))
+            lbg.append([0.0] * 4)
+            ubg.append([1.0] * 4)
             
             
             ##################### Implementation of the motor curve
@@ -1129,11 +1147,12 @@ class BicycleModel:
 
 
 class SweepWrapper:
-    def __init__(self, tracks, param_sweep, parts):
+    def __init__(self, tracks, param_sweep, parts, mesh=0.25):
         print("Initializing Sweeper")
         self.tracks = tracks
         self.param_sweep = param_sweep
         self.parts = parts
+        self.mesh = mesh        # make a mesh variable for each track
 
     # calculate the number of points corresponding to event performance using rulebook
     def points_estimate(self, laptimes, energies): 
@@ -1230,7 +1249,7 @@ class SweepWrapper:
 
     # Estimates competition points gained by given vehicle
     def get_points(self, vehicle):
-        mesh = 0.25 #m
+        # mesh = 0.25 #m
 
         # Define test track; TODO move this up in our structure
         basename = "track_files/"
@@ -1253,7 +1272,7 @@ class SweepWrapper:
             # If we're considering this event
             if event in self.tracks:
                 # Create a new solver for the given track and vehicle
-                solver = BicycleModel(basename+file, mesh, self.parts[event])
+                solver = BicycleModel(basename+file, self.mesh, self.parts[event])
                 solver.update_vehicle(vehicle)
 
                 laptime, energy = solver.run()
@@ -1336,9 +1355,9 @@ def run_test():
 def main_test():
     # Identify which events are relevant to our study    
     tracks = [
-                # 'endurance', 
+                 'endurance', 
                 # 'autoX', 
-                'skidpad', 
+                #'skidpad', 
                 # 'accel'
             ]
 
@@ -1356,13 +1375,13 @@ def main_test():
     # Divide each track into n segments to improve computation time
     # Adjust these based on your computer's abilities; higher number = faster, less accurate
     parts = {
-                'endurance': 6, 
+                'endurance': 5, 
                 'autoX': 6, 
                 'skidpad': 2, 
                 'accel': 1
             }
 
-    sweeper = SweepWrapper(tracks, param_sweep, parts)
+    sweeper = SweepWrapper(tracks, param_sweep, parts, 1.0)
     sweeper.sweep()
 
 
