@@ -3,7 +3,7 @@ import sys
 import time
 import numpy as np
 import casadi as ca
-import track_for_bicycle as tr
+import track as tr
 import vehicle as veh
 import pandas as pd
 

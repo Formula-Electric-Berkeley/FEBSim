@@ -280,7 +280,7 @@ class BicycleModel:
 
         # sideslip angle [rad/s]
         beta_n = ca.SX.sym("beta_n")
-        beta_s = 0.5
+        beta_s = 1.0
         beta = beta_s * beta_n
 
         # yaw rate [rad/s]
@@ -290,7 +290,7 @@ class BicycleModel:
 
         # lateral distance to reference line (positive = left) [m]
         n_n = ca.SX.sym("n_n")
-        n_s = 5.0
+        n_s = 4.0
         n = n_s * n_n
 
         # relative angle to tangent on reference line [rad]
@@ -342,12 +342,12 @@ class BicycleModel:
         f_brake_s = 20000.0
         f_brake = f_brake_s * f_brake_n
 
-        # longitudinal wheel load transfer [N]
+        # total longitudinal wheel load transfer [N]
         gamma_x_n = ca.SX.sym("gamma_x_n")
         gamma_x_s = 5000.0
         gamma_x = gamma_x_s * gamma_x_n
 
-        # lateral wheel load transfer [N]
+        # total lateral wheel load transfer [N]
         gamma_y_n = ca.SX.sym("gamma_y_n")
         gamma_y_s = 5000.0
         gamma_y = gamma_y_s * gamma_y_n
@@ -461,10 +461,10 @@ class BicycleModel:
         sigma_rl = (re * wrl - vlrl) / ca.fabs(vlrl)
 
         # compute wheel grip forces in the wheel frame
-        Flfr, Ftfr = self.vehicle.combined_slip_forces(0.0, alpha_fr, F_Nfr)  
-        Flfl, Ftfl = self.vehicle.combined_slip_forces(0.0, alpha_fl, F_Nfl)
-        Flrr, Ftrr = self.vehicle.combined_slip_forces(0.0, alpha_rr, F_Nrr)
-        Flrl, Ftrl = self.vehicle.combined_slip_forces(0.0, alpha_rl, F_Nrl)
+        Flfr, Ftfr = self.vehicle.combined_slip_forces(sigma_fr, alpha_fr, F_Nfr)  
+        Flfl, Ftfl = self.vehicle.combined_slip_forces(sigma_fl, alpha_fl, F_Nfl)
+        Flrr, Ftrr = self.vehicle.combined_slip_forces(sigma_rr, alpha_rr, F_Nrr)
+        Flrl, Ftrl = self.vehicle.combined_slip_forces(sigma_rl, alpha_rl, F_Nrl)
 
         # change wheel forces to body frame
         Fx_fr = Flfr * ca.cos(delta) - Ftfr * ca.sin(delta)
@@ -554,15 +554,16 @@ class BicycleModel:
 
         # For the driven wheels, 
 
+        # TODO: check; torque drive here looks to be the wheel torque, not the engine torque
         wrr_dot = (
             sf
-            * (-Flrr * re + torque_brake_rr + torque_drive / 2)
-            / (Jw + Je * self.veh["ratio_final"] / 2)
+            * (-Flrr * re + torque_brake_rr + self.veh["gear_ratio"] * torque_drive / 2)
+            / (Jw + Je * self.veh["gear_ratio"] / 2)
         )  # gear ratio
         wrl_dot = (
             sf
-            * (-Flrl * re + torque_brake_rl + torque_drive / 2)
-            / (Jw + Je * self.veh["ratio_final"] / 2)
+            * (-Flrl * re + torque_brake_rl + self.veh["gear_ratio"] * torque_drive / 2)
+            / (Jw + Je * self.veh["gear_ratio"] / 2)
         )
 
         # If wrr_dot and wrl_dot are positive, we're accelerating. Otherwise, we're decelerating
@@ -614,8 +615,10 @@ class BicycleModel:
         v_min = 0.0 / v_s  # min. velocity [m/s]
         v_max = self.veh["max_velocity"] / v_s  # max. velocity [m/s]
 
-        beta_min = -0.5 * np.pi / beta_s  # min. side slip angle [rad]
-        beta_max = 0.5 * np.pi / beta_s  # max. side slip angle [rad]
+        # Note: it is crucial beta + xi cannot equal pi/2; 
+        # beta = 90 does NOT mean pure lateral acceleration; it means the car drives sideways
+        beta_min = -0.25 * np.pi / beta_s  # min. side slip angle [rad]
+        beta_max = 0.25 * np.pi / beta_s  # max. side slip angle [rad]
 
         omega_z_min = -0.5 * np.pi / omega_z_s  # min. yaw rate [rad/s]
         omega_z_max = 0.5 * np.pi / omega_z_s  # max. yaw rate [rad/s]
@@ -781,6 +784,8 @@ class BicycleModel:
             ubw.append([delta_max, f_drive_max, f_brake_max, gamma_x_max, gamma_y_max])
             w0.append([0.0] * nu)
 
+            # TODO; interpolate kappa to the k point and set w more accurately; or just warm start using a simple model
+
             # add decision variables for the state at collocation points
             Xc = []
             for j in range(d):
@@ -837,8 +842,10 @@ class BicycleModel:
 
             # calculate time step and used energy
             dt_opt.append(sf_opt[0] + sf_opt[1] + sf_opt[2])
-            motor_speed = (Xk[7] + Xk[8]) / (2*self.veh["gear_ratio"])
-            ec_opt.append(motor_speed * wheel_scale * Uk[1] * torque_drive_s * dt_opt[-1])
+            motor_speed = (Xk[7] + Xk[8]) / (2*self.veh["gear_ratio"]) * wheel_scale
+            ec_opt.append(motor_speed * Uk[1] * torque_drive_s * dt_opt[-1])
+
+            # TODO**************** COMPARE WITH FX * DS as a ballpark
 
 
             # add new decision variables for the state at end of the collocation interval
@@ -1337,6 +1344,45 @@ class SweepWrapper:
         save_output(summary_df, "sweep_results.xlsx", metadata=param_df)
         
 
+# Get points for a direct input of laptimes
+def quick_points():
+    tracks = [
+                 'endurance', 
+                'autoX', 
+                'skidpad', 
+                'accel'
+            ]
+
+    # Identify which parameters we want to sweep over
+    param_sweep = {
+                "M": [310]
+
+    }
+
+    parts = {
+                'endurance': 6, 
+                'autoX': 6, 
+                'skidpad': 1, 
+                'accel': 1
+            }
+
+    wrapper = SweepWrapper(tracks, param_sweep, parts)
+
+    laptimes = {
+                'endurance': 74.71490146, 
+                'autoX': 62.492859, 
+                'skidpad': 5.521701644, 
+                'accel': 4.776928663
+            }
+    
+    energies = {
+                'endurance': 0.103633698, 
+                'autoX': 1, 
+                'skidpad': 1, 
+                'accel': 1
+            }
+    print(wrapper.points_estimate(laptimes, energies))
+
 
 def run_test():
     # Define test track
@@ -1355,10 +1401,10 @@ def run_test():
 def main_test():
     # Identify which events are relevant to our study    
     tracks = [
-                 'endurance', 
+                #  'endurance', 
                 # 'autoX', 
-                #'skidpad', 
-                # 'accel'
+                'skidpad', 
+                'accel'
             ]
 
     # Identify which parameters we want to sweep over
@@ -1366,7 +1412,7 @@ def main_test():
                 "M": [310],                                     # Mass in kg
                 # "Cl": [-3, -2, -1, -0.3],                       # Coefficient of lift (- for downforce)
                 # "Cd": [-3, -2, -1, -0.3],                       # Coefficient of drag (- for drag)
-                # "grip_factor": [0.7, 0.85, 1],                  # Grip factor (crude estimate of driver "maximizing grip usage")
+                "grip_factor": [0.9, 0.8] #, 0.85, 1],                  # Grip factor (crude estimate of driver "maximizing grip usage")
                 # "re": [0.35],                                   # Effective wheel radius, meters
                 # "mu": [0.75]#, 0.9]
 
@@ -1375,9 +1421,9 @@ def main_test():
     # Divide each track into n segments to improve computation time
     # Adjust these based on your computer's abilities; higher number = faster, less accurate
     parts = {
-                'endurance': 5, 
+                'endurance': 6, 
                 'autoX': 6, 
-                'skidpad': 2, 
+                'skidpad': 1, 
                 'accel': 1
             }
 
@@ -1386,4 +1432,4 @@ def main_test():
 
 
 
-main_test()
+quick_points()
