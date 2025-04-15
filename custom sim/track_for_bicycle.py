@@ -124,6 +124,11 @@ class Track:
     # separates curvatures array into multiple parts
     def split(self, parts):
         return np.array_split(self.curvatures, parts)
+    
+    # Auto-partition; 
+    # S = cumsum(x)
+    # partition S by 200m; find nearest i where r[i] = 0 such that 250m is max distance
+    # maybe loop back through, find spacings of all r[i] = 0
 
     def plot_track(s, kappa):
         # Initialize arrays for plotting
