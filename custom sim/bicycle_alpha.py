@@ -9,6 +9,8 @@ import vehicle as veh
 import powertrain_model
 from scipy.interpolate import interp1d
 import os
+import trackAndCar as TrackPlot
+import time
 
 
 
@@ -132,6 +134,7 @@ class BicycleModel:
         # Initialize the track and vehicle by loading the relevant files
         self.initialize_track(track_file, mesh_size, track_parts)
         self.initialize_vehicle()
+        self.track_file = track_file
         self.mesh_size = mesh_size
 
     def initialize_track(self, trackfile, mesh_size, parts):
@@ -162,7 +165,7 @@ class BicycleModel:
             print('Running part {}: '.format(i))
             
             # Pass init_state so it continues from the last state's final values
-            df_segment = self.opt_mintime(part, self.mesh_size, init_state=init_state)
+            df_segment = self.opt_mintime(part, self.mesh_size, init_state=init_state, segment_number = i)
             dfs.append(df_segment)
             
             # If there's a solution, store the final state for the next segment
@@ -182,7 +185,10 @@ class BicycleModel:
 
         combined_df = pd.concat(dfs, axis=0, ignore_index=True)
 
-        save_output(combined_df, 'combined_output.xlsx')
+        output_file_name = self.track_file[:-5] + '_' + f'{time.time()}' + '.xlsx'
+        save_output(combined_df, output_file_name)
+
+        TrackPlot.plot_track(self.track_file, output_file_name, self.mesh_size)
 
         laptime = sum(df["time"].iloc[-1] for df in dfs if not df.empty)
 
@@ -193,7 +199,7 @@ class BicycleModel:
         return laptime, energy
 
 
-    def opt_mintime(self, curvatures, mesh_size, init_state=None):
+    def opt_mintime(self, curvatures, mesh_size, init_state=None, segment_number = None):
         # ------------------------------------------------------------------------------------------------------------------
         # GET TRACK INFORMATION --------------------------------------------------------------------------------------------
         # ------------------------------------------------------------------------------------------------------------------
@@ -1145,7 +1151,8 @@ class BicycleModel:
 
         df1.columns = header
 
-        save_output(df1, 'bicycle_out.xlsx')
+        output_name = self.track_file[:-5] + f'{segment_number}'
+        save_output(df1, 'bicycle_' + output_name + '.xlsx')
 
         return df1
         
@@ -1403,7 +1410,7 @@ def main_test():
     tracks = [
                 #  'endurance', 
                 # 'autoX', 
-                'skidpad', 
+                #'skidpad', 
                 'accel'
             ]
 
