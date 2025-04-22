@@ -172,7 +172,8 @@ if two_track:
     wf      = 1.7         # rear axle width
     wr      = 1.7         # front axle width
     h       = 0.5         # distance from road surface to vehicle center of mass
-    mu      = 0.75        # coefficient of friction for tires
+    mu      = 2.3           # coefficient of friction for tires
+    # GET FROM CALSPAN
     tau_b   = 0.05        # brake time constant (first order lag)
 
 
@@ -190,6 +191,7 @@ if two_track:
     cg_height = h
 
     #How to find the max rad/s of the wheels?
+    ratio_final = 32/11
     gear_ratio = ratio_final
     omega_max = 5500/gear_ratio #5500 rpm is the max for the motor
     omega_max = omega_max*np.pi/30 #convert to rad/s
