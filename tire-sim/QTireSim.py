@@ -143,7 +143,9 @@ def single_fig_color_gradient(metric_data : pd.DataFrame) -> go.Figure:
     return fig
 
 def bin_figs(data_binned : List[pd.DataFrame], params_binned : List[tuple[float, float, float, float ,float]], Fz_bins : List[tuple[float, float]]) -> go.Figure:
-    fig = make_subplots(rows=GRAPH_ROWS, cols=GRAPH_COLS, subplot_titles=[f"Fy over SA for Fz in bin [{lb:.2f}, {ub:.2f})" for lb, ub in Fz_bins])
+    fig = make_subplots(rows=GRAPH_ROWS, cols=GRAPH_COLS, 
+                        subplot_titles=[f"Load force in [{lb:.2f}, {ub:.2f})" for lb, ub in Fz_bins]
+    )
 
     for i in range(FZ_BIN_COUNT):
         data_bin = data_binned[i]
@@ -178,6 +180,60 @@ def bin_figs(data_binned : List[pd.DataFrame], params_binned : List[tuple[float,
             row=i // GRAPH_COLS + 1, 
             col=i % GRAPH_COLS + 1
         )
+
+    fig.update_xaxes(title_text="Slip Angle (deg)")
+    fig.update_yaxes(title_text="Lateral Force (N)")
+    fig.update_layout(title_text=f"Lateral Force over Slip Angle for Load Force bins")
+    
+    return fig
+
+def bins_single_fig(data_binned : List[pd.DataFrame], params_binned : List[tuple[float, float, float, float ,float]], Fz_bins : List[tuple[float, float]]) -> go.Figure:
+    fig = go.Figure()
+    graph_domain = np.linspace(min(min(data_bin["SA deg"]) for data_bin in data_binned), max(max(data_bin["SA deg"]) for data_bin in data_binned), 500)
+
+    colors = [
+        ("brown", "salmon"),
+        ("midnightblue", "royalblue"),
+        ("seagreen", "olive"),
+        ("purple", "violet"),
+        ("black", "gray")
+    ]
+
+    for i in range(FZ_BIN_COUNT):
+        data_bin = data_binned[i]
+
+        # Draw scatterplot of data
+        # fig.add_trace(
+        #     go.Scatter( x=data_bin["SA deg"], 
+        #                 y=data_bin["FY N"], 
+        #                 mode="markers", 
+        #                 marker=dict(color=colors[i][0]), 
+        #                 name=f'Data, Load force = {(Fz_bins[i][0] + Fz_bins[i][1]) // 2}'
+        #     )
+        # )
+
+        # Draw pacejka curve
+        fig.add_trace(
+            go.Scatter(
+                x=graph_domain, 
+                y=pacejka_model(graph_domain, *params_binned[i]), 
+                mode="lines", 
+                marker=dict(
+                    color=BIN_COLORS[i]
+                    ), 
+                name=f'{(Fz_bins[i][0] + Fz_bins[i][1]) // 2}',
+                legendrank=100  # try a high value to prioritize
+            )
+        )
+
+    fig.update_xaxes(title_text="Slip Angle (deg)")
+    fig.update_yaxes(title_text="Lateral Force (N)")
+    fig.update_layout(
+        title_text=f"Lateral Force vs Slip Angle",
+        legend=dict(x=0.93,y=0.96),
+        legend_title_text='Fz (N)',
+    )
+    fig.update_traces(line={'width': 3})
     
     return fig
 
@@ -237,18 +293,6 @@ all_data_binned = Fz_bin_data(all_data, Fz_bins)
 
 params_binned = np.array(list(map(get_pacejka_params, all_data_binned)))
 
-# new_fig = single_fig_color_gradient(all_data[all_data["FZ N"] < -1000])
-# new_fig.update_layout(
-#     title="Lateral Force over Slip Angle",
-#     xaxis_title="Slip Angle (deg)",
-#     yaxis_title="Lateral Force (N)"
-# )
-
-# new_fig.write_html("QVis.html")
-
-# new_fig = bin_figs(all_data_binned, params_binned, Fz_bins)
-# new_fig.write_html("QVis.html")
-
 for i in range(FZ_BIN_COUNT):
     print(f"Pacejka params for bin {i}:", params_binned[i])
 
@@ -258,6 +302,12 @@ for i in range(FZ_BIN_COUNT):
 print(params_binned)
 
 new_fig = coefficient_figs(params_binned, Fz_bins)
-new_fig.write_html("QVis.html")
+new_fig.write_html("fy_out/figures/coefficient_plot.html")
+
+new_fig = bin_figs(all_data_binned, params_binned, Fz_bins)
+new_fig.write_html("fy_out/figures/binned_data_plot.html")
+
+new_fig = bins_single_fig(all_data_binned, params_binned, Fz_bins)
+new_fig.write_html("fy_out/figures/binned_data_single_plot.html")
 
 sys.exit(0)
