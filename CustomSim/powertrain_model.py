@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import casadi as ca
 from scipy.interpolate import Rbf
 import matplotlib.pyplot as plt
+import os
 
 class motor():
     def __init__(self):
@@ -132,7 +133,13 @@ class motor():
     def get_motor_efficiency(self):
         colors = ['red', 'orange', 'green', 'blue', 'violet']  # Not used here
 
-        base_name = 'motor_curves\\'
+        base_name = ""
+        
+        if os.name == "nt":
+            base_name = 'motor_curves\\'
+        else:
+            base_name = 'motor_curves/'
+            
         labels = [86, 90, 94, 95, 96]  # Efficiency values
         datasets = []
 
