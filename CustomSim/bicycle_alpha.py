@@ -1220,7 +1220,7 @@ class BicycleModel:
         We construct our spline using Lagrange polynomials to make interpolation easier
         """
         # degree of interpolating polynomial ("sweet spot" according to MIT robotics paper)
-        d = 3
+        d = 2
 
         # legendre collocation points ; gives the temporal location of the collocation points along our spline
         tau = np.append(0, ca.collocation_points(d, "legendre"))
@@ -1434,10 +1434,14 @@ class BicycleModel:
         alpha_rl = -ca.arctan(vtrl / (ca.fabs(vlrl) + epsilon))
 
         # compute wheel grip forces in the wheel frame
-        Flfr, Ftfr = self.vehicle.tire_model_func(ca.MX(0.0), alpha_fr, F_Nfr)  
-        Flfl, Ftfl = self.vehicle.tire_model_func(ca.MX(0.0), alpha_fl, F_Nfl)
-        Flrr, Ftrr = self.vehicle.tire_model_func(ca.MX(0.0), alpha_rr, F_Nrr)
-        Flrl, Ftrl = self.vehicle.tire_model_func(ca.MX(0.0), alpha_rl, F_Nrl)
+        # Flfr, Ftfr = self.vehicle.tire_model_func(ca.MX(0.0), alpha_fr, F_Nfr)  
+        # Flfl, Ftfl = self.vehicle.tire_model_func(ca.MX(0.0), alpha_fl, F_Nfl)
+        # Flrr, Ftrr = self.vehicle.tire_model_func(ca.MX(0.0), alpha_rr, F_Nrr)
+        # Flrl, Ftrl = self.vehicle.tire_model_func(ca.MX(0.0), alpha_rl, F_Nrl)
+        Flfr, Ftfr = self.vehicle.combined_slip_forces(0.0, alpha_fr, F_Nfr)  
+        Flfl, Ftfl = self.vehicle.combined_slip_forces(0.0, alpha_fl, F_Nfl)
+        Flrr, Ftrr = self.vehicle.combined_slip_forces(0.0, alpha_rr, F_Nrr)
+        Flrl, Ftrl = self.vehicle.combined_slip_forces(0.0, alpha_rl, F_Nrl)
 
         # distribute commanded brake force to the wheels based on our vehicle's brake force distribution
         F_brake_fr = self.veh["brake_fr"] * f_brake  # brake force of front right wheel
@@ -1783,7 +1787,7 @@ class BicycleModel:
             k_opt.append(curv[1])
 
             # calculate time step and used energy
-            dt_opt.append(sf_opt[0] + sf_opt[1] + sf_opt[2])
+            dt_opt.append(np.sum(sf_opt))
             motor_speed = (Xk[0]*v_s/re) / (self.veh["gear_ratio"]) # no slip ratio 
             ec_opt.append(motor_speed * Uk[1] * torque_drive_s * dt_opt[-1])
 
@@ -1986,7 +1990,7 @@ class BicycleModel:
         nlp = {"f": J, "x": w, "g": g}
 
         # solver options
-        opts = {"expand": False, 
+        opts = {"expand": True, 
                 "ipopt": {
                     "max_iter": 10000,
                     "tol": 1e-6,
