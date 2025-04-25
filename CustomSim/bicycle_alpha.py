@@ -109,10 +109,10 @@ class Vehicle:
         self.F_vals = [0.023, 0.038, 0.035, 0.01]
 
         self.B_interp = ca.interpolant('B', 'bspline', [self.Fz_bins], self.B_vals)
-        self.C_interp = ca.interpolant('C', 'linear', [self.Fz_bins], self.C_vals)
-        self.D_interp = ca.interpolant('D', 'linear', [self.Fz_bins], self.D_vals)
-        self.E_interp = ca.interpolant('E', 'linear', [self.Fz_bins], self.E_vals)
-        self.F_interp = ca.interpolant('F', 'linear', [self.Fz_bins], self.F_vals)
+        self.C_interp = ca.interpolant('C', 'bspline', [self.Fz_bins], self.C_vals)
+        self.D_interp = ca.interpolant('D', 'bspline', [self.Fz_bins], self.D_vals)
+        self.E_interp = ca.interpolant('E', 'bspline', [self.Fz_bins], self.E_vals)
+        self.F_interp = ca.interpolant('F', 'bspline', [self.Fz_bins], self.F_vals)
 
         By = self.B_interp(Fz)
         Cy = self.C_interp(Fz)
@@ -598,12 +598,12 @@ class BicycleModel:
         wrr_dot = (
             sf
             * (-Flrr * re + torque_brake_rr + self.veh["gear_ratio"] * torque_drive / 2)
-            / (Jw + Je * self.veh["gear_ratio"] / 2)
+            / (Jw + Je)
         )  # gear ratio
         wrl_dot = (
             sf
             * (-Flrl * re + torque_brake_rl + self.veh["gear_ratio"] * torque_drive / 2)
-            / (Jw + Je * self.veh["gear_ratio"] / 2)
+            / (Jw + Je)
         )
 
         # If wrr_dot and wrl_dot are positive, we're accelerating. Otherwise, we're decelerating
@@ -876,13 +876,14 @@ class BicycleModel:
                 # add contribution to scaling factor (for calculating lap time)
                 sf_opt.append(B[j] * qj * mesh_point_separations[k])
                 curv.append(kappa_col)
-                
+              
             # get middle curvature collocation point
             k_opt.append(curv[1])
 
             # calculate time step and used energy
+            # DRIVEN GEAR IS SLOWER BY FACTOR OF R
             dt_opt.append(sf_opt[0] + sf_opt[1] + sf_opt[2])
-            motor_speed = (Xk[7] + Xk[8]) / (2*self.veh["gear_ratio"]) * wheel_scale
+            motor_speed = self.veh["gear_ratio"]*(Xk[7] + Xk[8]) / (2) * wheel_scale
             ec_opt.append(motor_speed * Uk[1] * torque_drive_s * dt_opt[-1])
 
             # TODO**************** COMPARE WITH FX * DS as a ballpark
@@ -995,7 +996,8 @@ class BicycleModel:
             
             # Determine the motor speed in rad/s
             # TODO not scaled by wheel_scale here???
-            known_motor_speed = (Xk[7] + Xk[8]) / (2*self.veh["gear_ratio"]) * wheel_scale
+            # TODO----WRONG--------WHY GEAR RATIO
+            known_motor_speed = self.veh["gear_ratio"]*(Xk[7] + Xk[8]) / (2) * wheel_scale
             known_motor_speed = known_motor_speed * 30/np.pi # convert to rpm
 
             # Interpolate our motor curve to get the maximum allowed motor torque for this speed
@@ -1220,7 +1222,7 @@ class BicycleModel:
         We construct our spline using Lagrange polynomials to make interpolation easier
         """
         # degree of interpolating polynomial ("sweet spot" according to MIT robotics paper)
-        d = 2
+        d = 3
 
         # legendre collocation points ; gives the temporal location of the collocation points along our spline
         tau = np.append(0, ca.collocation_points(d, "legendre"))
@@ -1296,9 +1298,6 @@ class BicycleModel:
         xi_s = 1.0
         xi = xi_s * xi_n
 
-
-        wheel_scale = 300
-
         x_s = np.array([v_s, beta_s, omega_z_s, n_s, xi_s])
 
         # vertical vector for the state variables
@@ -1318,7 +1317,7 @@ class BicycleModel:
 
         # positive drive torque from the motor [N-m]
         torque_drive_n = ca.MX.sym("f_drive_n")
-        torque_drive_s = 6000.0
+        torque_drive_s = 600.0
         torque_drive = torque_drive_s * torque_drive_n
 
         # negative longitudinal force (brake) [N]
@@ -1352,8 +1351,6 @@ class BicycleModel:
         """
 
 
-        # TODO; this is where we should change our vehicle
-
         # define physical constants and vehicle parameters; pass these in in the future
         g = 9.81  # [m/s^2]
         mass = self.veh["M"]    # [kg]
@@ -1369,7 +1366,7 @@ class BicycleModel:
         rb = self.veh["rb"]     # effective brake radius
         Iz = self.veh["Iz"]     # vehicle moment of inertia about z axis
 
-        # Aero stuff
+        # Aero stuff****************************
         air_density = self.veh["rho"]
         frontal_area = self.veh["A"]
         Cl = self.veh["Cl"]      # NEGATIVE Cl means downforce
@@ -1378,7 +1375,6 @@ class BicycleModel:
         drag_coeff = 0.5*air_density*Cd*frontal_area
         df_coeff = - 0.5*air_density*Cl*frontal_area    # "Positive force" = down
 
-        # TODO; WIP implementation 9/30/24
         # Compute aerodynamic and drag forces
         # Assumes df shared equally bw all wheels and that front area and Cl/Cd do not change w angle of attack
         # Also assumes 0.5 COP right now; this can change later
@@ -1392,15 +1388,23 @@ class BicycleModel:
         k_roll = 0.5        # roll balance: how is gamma_y distributed between front and back
         k_pitch = 0.5       # how is longitudinal load difference distributed between left and right 
 
-        F_Nfr_weight = (mass * g * lr) / (L * 2) - k_roll*gamma_y
-        F_Nfl_weight = (mass * g * lr) / (L * 2) + k_roll*gamma_y
-        F_Nrr_weight = (mass * g * lf) / (L * 2) - (1-k_roll)*gamma_y
-        F_Nrl_weight = (mass * g * lf) / (L * 2) + (1-k_roll)*gamma_y
+        # static normal tire forces [N]
+        F_Nfr_weight = 0.5*(mass * g) * lr / L 
+        F_Nfl_weight = 0.5*(mass * g) * lr / L
+        F_Nrr_weight = 0.5*(mass * g) * lf / L 
+        F_Nrl_weight = 0.5*(mass * g) * lf / L 
 
-        F_Nfr = F_Nfr_weight + Fz_aero_down*0.25
-        F_Nfl = F_Nfl_weight + Fz_aero_down*0.25
-        F_Nrr = F_Nrr_weight + Fz_aero_down*0.25
-        F_Nrl = F_Nrl_weight + Fz_aero_down*0.25
+        # dynamic normal tire forces (load transfer) [N]
+        F_Nfr_dyn = -k_roll*gamma_y
+        F_Nfl_dyn =  k_roll*gamma_y
+        F_Nrr_dyn = -1*(1-k_roll)*gamma_y
+        F_Nrl_dyn = (1-k_roll)*gamma_y
+
+        # sum of all normal tire forces (including aero) [N]
+        F_Nfr = F_Nfr_weight + F_Nfr_dyn + Fz_aero_down*0.25
+        F_Nfl = F_Nfl_weight + F_Nfl_dyn + Fz_aero_down*0.25
+        F_Nrr = F_Nrr_weight + F_Nrr_dyn + Fz_aero_down*0.25
+        F_Nrl = F_Nrl_weight + F_Nrl_dyn + Fz_aero_down*0.25
 
         # project velocity to longitudinal and lateral vehicle axes (for eventual calculation of drag and slip angle/ratio)
         vx = v * ca.cos(beta)
@@ -1428,20 +1432,32 @@ class BicycleModel:
 
         # compute the slip angles from the velocities at each wheel
         epsilon = 1e-3
-        alpha_fr = -ca.arctan(vtfr / (ca.fabs(vlfr)  + epsilon))
-        alpha_fl = -ca.arctan(vtfl / (ca.fabs(vlfl) + epsilon))
-        alpha_rr = -ca.arctan(vtrr / (ca.fabs(vlrr) + epsilon))
-        alpha_rl = -ca.arctan(vtrl / (ca.fabs(vlrl) + epsilon))
+        # alpha_fr = -ca.arctan(vtfr / (ca.fabs(vlfr)  + epsilon))
+        # alpha_fl = -ca.arctan(vtfl / (ca.fabs(vlfl) + epsilon))
+        # alpha_rr = -ca.arctan(vtrr / (ca.fabs(vlrr) + epsilon))
+        # alpha_rl = -ca.arctan(vtrl / (ca.fabs(vlrl) + epsilon))
+
+        # slip angles [rad]
+        alpha_fl = delta - ca.atan((vy_fl) /
+                                (vx_fl))
+        alpha_fr = delta - ca.atan((vy_fr) /
+                                (vx_fr))
+        
+        # identical for rear wheels
+        alpha_rl = -ca.atan((vy_rl) /
+                        (vx_rl))
+        alpha_rr = -ca.atan((vy_rr) /
+                        (vx_rr))
 
         # compute wheel grip forces in the wheel frame
         # Flfr, Ftfr = self.vehicle.tire_model_func(ca.MX(0.0), alpha_fr, F_Nfr)  
         # Flfl, Ftfl = self.vehicle.tire_model_func(ca.MX(0.0), alpha_fl, F_Nfl)
         # Flrr, Ftrr = self.vehicle.tire_model_func(ca.MX(0.0), alpha_rr, F_Nrr)
         # Flrl, Ftrl = self.vehicle.tire_model_func(ca.MX(0.0), alpha_rl, F_Nrl)
-        Flfr, Ftfr = self.vehicle.combined_slip_forces(0.0, alpha_fr, F_Nfr)  
-        Flfl, Ftfl = self.vehicle.combined_slip_forces(0.0, alpha_fl, F_Nfl)
-        Flrr, Ftrr = self.vehicle.combined_slip_forces(0.0, alpha_rr, F_Nrr)
-        Flrl, Ftrl = self.vehicle.combined_slip_forces(0.0, alpha_rl, F_Nrl)
+        __, f_trans_fr = self.vehicle.combined_slip_forces(0.0, alpha_fr, F_Nfr)  
+        __, f_trans_fl = self.vehicle.combined_slip_forces(0.0, alpha_fl, F_Nfl)
+        __, f_trans_rr = self.vehicle.combined_slip_forces(0.0, alpha_rr, F_Nrr)
+        __, f_trans_rl = self.vehicle.combined_slip_forces(0.0, alpha_rl, F_Nrl)
 
         # distribute commanded brake force to the wheels based on our vehicle's brake force distribution
         F_brake_fr = self.veh["brake_fr"] * f_brake  # brake force of front right wheel
@@ -1450,44 +1466,48 @@ class BicycleModel:
         F_brake_rr = self.veh["brake_rr"] * f_brake
 
         # longitudinal tire forces based on simplest longitudinal model [N]
+        # Torque_drive is the torque output by the motor, so wheels receive a greater torque
         f_drive = self.veh["gear_ratio"] * torque_drive / (re)
         f_long_fr = F_brake_fr
         f_long_fl = F_brake_fl
         f_long_rl = 0.5 * f_drive + F_brake_rl
         f_long_rr = 0.5 * f_drive + F_brake_rr
 
-
-        Flfr = f_long_fr 
-        Flfl = f_long_fl
-        Flrr = f_long_rr
-        Flrl = f_long_rl
-
-
         # change wheel forces to body frame
-        Fx_fr = Flfr * ca.cos(delta) - Ftfr * ca.sin(delta)
-        Fy_fr = Flfr * ca.sin(delta) + Ftfr * ca.cos(delta)
-        Fx_fl = Flfl * ca.cos(delta) - Ftfl * ca.sin(delta)
-        Fy_fl = Flfl * ca.sin(delta) + Ftfl * ca.cos(delta)
-        Fx_rr = Flrr
-        Fy_rr = Ftrr
-        Fx_rl = Flrl    # Driven wheels are oriented parallel to the car in RWD
-        Fy_rl = Ftrl
+        f_x_fr = f_long_fr * ca.cos(delta) - f_trans_fr * ca.sin(delta)
+        f_y_fr = f_long_fr * ca.sin(delta) + f_trans_fr * ca.cos(delta)
+        f_x_fl = f_long_fl * ca.cos(delta) - f_trans_fl * ca.sin(delta)
+        f_y_fl = f_long_fl * ca.sin(delta) + f_trans_fl * ca.cos(delta)
+        f_x_rr = f_long_rr
+        f_y_rr = f_trans_rr
+        f_x_rl = f_long_rl    # Driven wheels are oriented parallel to the car in RWD
+        f_y_rl = f_trans_rl
 
         
         # compute the net force and torque on the vehicle
         Fx = (
-            Fx_fr + Fx_fl + Fx_rl + Fx_rr + Fx_aero_drag
+            f_x_fr + f_x_fl + f_x_rl + f_x_rr + Fx_aero_drag
         )  # net force in the x (longitudinal car direction)
-        Fy = Fy_fr + Fy_fl + Fy_rr + Fy_rl  # net force in the y (lateral car direction)
+        Fy = f_y_fr + f_y_fl + f_y_rr + f_y_rl  # net force in the y (lateral car direction)
 
 
-        # TODO: fix THIS ASAP
+        # Compute net torque about Z axis
         Kz = (
-            lf * (Fy_fr + Fy_fl)
-            - lr * (Fy_rr + Fy_rl)
-            + wf / 2 * (Fx_fr - Fx_fl)
-            + wr / 2 * (Fx_rr - Fx_rl)
-        )  # net torque about z axis
+            lf * (f_y_fr + f_y_fl)
+            - lr * (f_y_rr + f_y_rl)
+            + wf / 2 * (f_x_fr - f_x_fl)
+            + wr / 2 * (f_x_rr - f_x_rl)
+        )  
+
+        # in their convention, fx = f_long, fy = f_trans; these are equivalent statements
+        # Kz = ((f_x_rr - f_x_rl) * wr / 2
+        #         - (f_y_rl + f_y_rr) * lr
+        #         + ((f_x_fr - f_x_fl) * ca.cos(delta)
+        #             + (f_y_fl - f_y_fr) * ca.sin(delta)) * wf / 2
+        # This should be lf, but otherwise they're identical still.
+        # The moment is about Iz; y component of fr and fr wheels moves lf back to COM           
+        #         + ((f_y_fl + f_y_fr) * ca.cos(delta)
+        #             + (f_x_fl + f_x_fr) * ca.sin(delta)) * wf)
 
         # ------------------------------------------------------------------------------------------------------------------
         # DERIVATIVES ------------------------------------------------------------------------------------------------------
@@ -1506,20 +1526,20 @@ class BicycleModel:
         # vy_dot = (-vx*omega_z + Fy/mass)*sf
 
         dv = (sf / mass) * (
-            (Flrl + Flrr) * ca.cos(beta)
-            + (Flfl + Flfr) * ca.cos(delta - beta)
-            + (Ftrl + Ftrr) * ca.sin(beta)
-            - (Ftfl + Ftfr) * ca.sin(delta - beta)
+            (f_long_rl + f_long_rr) * ca.cos(beta)
+            + (f_long_fl + f_long_fr) * ca.cos(delta - beta)
+            + (f_trans_rl + f_trans_rr) * ca.sin(beta)
+            - (f_trans_fl + f_trans_fr) * ca.sin(delta - beta)
             - Fx_aero_drag * ca.cos(beta)
         )
 
         dbeta = sf * (
             -omega_z
             + (
-                -(Flrl + Flrr) * ca.sin(beta)
-                + (Flfl + Flfr) * ca.sin(delta - beta)
-                + (Ftrl + Ftrr) * ca.cos(beta)
-                + (Ftfl + Ftfr) * ca.cos(delta - beta)
+                -(f_long_rl + f_long_rr) * ca.sin(beta)
+                + (f_long_fl + f_long_fr) * ca.sin(delta - beta)
+                + (f_trans_rl + f_trans_rr) * ca.cos(beta)
+                + (f_trans_fl + f_trans_fr) * ca.cos(delta - beta)
                 + Fx_aero_drag * ca.sin(beta)
             )
             / (mass * v)
@@ -1571,7 +1591,7 @@ class BicycleModel:
         # STATE BOUNDARIES -------------------------------------------------------------------------------------------------
         # ------------------------------------------------------------------------------------------------------------------
 
-        v_min = 0.0 / v_s  # min. velocity [m/s]
+        v_min = 3.0 / v_s  # min. velocity [m/s]
         v_max = self.veh["max_velocity"] / v_s  # max. velocity [m/s]
 
         # Note: it is crucial beta + xi cannot equal pi/2; 
@@ -1594,10 +1614,6 @@ class BicycleModel:
         n_min = -self.n_max_unnormalized / n_s  # min lateral distance from reference line [m]
         n_max = self.n_max_unnormalized / n_s
 
-        # for simplicitly, wheels cannot spin backwards, and we cannot have slip ratios > 1
-        wheelspeed_min = 0.0
-        wheelspeed_max = 2 * self.veh["max_velocity"] / self.veh["re"] / wheel_scale
-
         # ------------------------------------------------------------------------------------------------------------------
         # INITIAL GUESS FOR DECISION VARIABLES -----------------------------------------------------------------------------
         # ------------------------------------------------------------------------------------------------------------------
@@ -1616,17 +1632,17 @@ class BicycleModel:
         f_fx = ca.Function(
             "f_fx",
             [x, u],
-            [Fx_fl, Fx_fr, Fx_rl, Fx_rr],
+            [f_x_fl, f_x_fr, f_x_rl, f_x_rr],
             ["x", "u"],
-            ["Fxfl", "Fxfr", "Fxrl", "Fxrr"],
+            ["f_x_fl", "f_x_fr", "f_x_rl", "f_x_rr"],
         )
         # lateral tire forces in the vehicle frame [N]
         f_fy = ca.Function(
             "f_fy",
             [x, u],
-            [Fy_fl, Fy_fr, Fy_rl, Fy_rr],
+            [f_y_fl, f_y_fr, f_y_rl, f_y_rr],
             ["x", "u"],
-            ["Fyfl", "Fyfr", "Fyrl", "Fyrr"],
+            ["f_y_fl", "f_y_fr", "f_y_rl", "f_y_rr"],
         )
 
         # vertical tire forces [N]
@@ -1788,7 +1804,7 @@ class BicycleModel:
 
             # calculate time step and used energy
             dt_opt.append(np.sum(sf_opt))
-            motor_speed = (Xk[0]*v_s/re) / (self.veh["gear_ratio"]) # no slip ratio 
+            motor_speed = self.veh["gear_ratio"]*(Xk[0]*v_s/re) # no slip ratio 
             ec_opt.append(motor_speed * Uk[1] * torque_drive_s * dt_opt[-1])
 
 
@@ -1828,12 +1844,11 @@ class BicycleModel:
             lbg.append([0.0] * nx)
             ubg.append([0.0] * nx)
 
-
-
             # path constraint: f_drive * f_brake == 0 (no simultaneous operation of brake and accelerator pedal)
             g.append(Uk[1] * Uk[2])
             lbg.append([0.0])
             ubg.append([0.0])
+
 
             # get tire forces (used for enforcing no pitch and roll)
             f_x_flk, f_x_frk, f_x_rlk, f_x_rrk = f_fx(Xk, Uk)
@@ -1844,7 +1859,7 @@ class BicycleModel:
 
             f_z_flk, f_z_frk, f_z_rlk, f_z_rrk = f_fz(Xk, Uk)
 
-            roll_relaxation = 1e-5
+            roll_relaxation = 1e-2
             pitch_relaxation = 1e-5
 
             # path constraint: longitudinal wheel load transfer assuming Ky = 0 (no pitch)
@@ -1893,7 +1908,7 @@ class BicycleModel:
             ubg.append([power_cap / (torque_drive_s * v_s)])
             
             # # Determine the motor speed in rad/s
-            # known_motor_speed = (Xk[0]*v_s/re) / (self.veh["gear_ratio"]) # no slip ratio 
+            # known_motor_speed = self.veh["gear_ratio"]*(Xk[0]*v_s/re)  # no slip ratio 
             # known_motor_speed = known_motor_speed * 30/np.pi # convert to rpm
 
             # # Interpolate our motor curve to get the maximum allowed motor torque for this speed
@@ -1922,19 +1937,14 @@ class BicycleModel:
             # ubg.append([ca.inf])
 
             
-
             delta_p.append(Uk[0] * delta_s)
-            F_p.append(Uk[1] * torque_drive_s / 10000.0 + Uk[2] * f_brake_s / 10000.0)
+            F_p.append(Uk[1] * torque_drive_s + Uk[2] * f_brake_s)
 
             # append outputs
             # After we constrain Xk and Uk, add them to our control vectors
             x_opt.append(Xk * x_s)
             u_opt.append(Uk * u_s)
 
-        # boundary constraint: start states = final states (only needed for a closed track)
-        # g.append(w[0] - Xk)
-        # lbg.append([0.0] * nx)
-        # ubg.append([0.0] * nx)
 
         # formulate differentiation matrix (for regularization)
         diff_matrix = np.eye(N)
@@ -1953,9 +1963,8 @@ class BicycleModel:
         Jp_f = ca.dot(Jp_f, Jp_f)
 
         # formulate objective
-
-        r_delta = 2e+2 
-        r_F = 1e-3
+        r_delta = 3
+        r_F = 1e-9
         J = J + r_F * Jp_f + r_delta * Jp_delta
 
         # concatenate NLP vectors to form a large but sparse matrix equation
@@ -1987,7 +1996,7 @@ class BicycleModel:
         """
 
         # set up the nlp using CasADi's notation
-        nlp = {"f": J, "x": w, "g": g}
+        nlp = {"f": J/70, "x": w, "g": g}
 
         # solver options
         opts = {"expand": True, 
@@ -2066,14 +2075,9 @@ class BicycleModel:
             "omega_z",
             "n",
             "xi",
-            "wfr",
-            "wfl",
-            "wbl",
-            "wbr",
             "delta",
             "torque_drive",
             "f_brake",
-            "gamma_x",
             "gamma_y",
             "energy"
         ]
