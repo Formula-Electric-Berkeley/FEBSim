@@ -172,7 +172,7 @@ class BicycleModel:
         self.tr = Track(trackfile, mesh_size)
         print("Initialized track {}".format(trackfile))
         # Break the track into parts splines of curvature
-        self.parts = self.tr.split(parts)
+        self.parts = self.tr.split_on_straights(self.tr.get_length()//(parts + 1), 3, parts + 3)
         self.n_max_unnormalized = 4
         if 'skidpad' in trackfile:
             self.n_max_unnormalized = 1.2

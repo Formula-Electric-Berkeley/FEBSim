@@ -125,6 +125,61 @@ class Track:
     def split(self, parts):
         return np.array_split(self.curvatures, parts)
     
+    def split_on_straights(self, len_straights, min_partition_len, max_parts):
+        #assumptions: starts out on straight
+        is_straight = True
+        current_length_of_straight = self.x[0]
+        len_since_last_partition = self.x[0]
+        indices_to_partition = []
+
+        for i in range(1, len(self.r)):
+            if abs(self.r[i]) < 10e-5:
+                is_straight = True
+            else:
+                is_straight = False
+
+            if is_straight:
+                current_length_of_straight += (self.x[i] - self.x[i - 1])
+                len_since_last_partition += (self.x[i] - self.x[i - 1])
+
+                if current_length_of_straight >= len_straights and len_since_last_partition >= min_partition_len:
+                    indices_to_partition.append(i)
+                    current_length_of_straight = 0
+                    len_since_last_partition = 0
+            else:
+                len_since_last_partition += (self.x[i] - self.x[i - 1])
+
+        parts = np.split(self.curvatures, indices_to_partition)
+
+        if len(parts) > max_parts:
+            return np.array_split(self.curvatures, max_parts)
+
+        return np.split(self.curvatures, indices_to_partition)
+    
+    def split_alt(self, min_partition_len, max_parts):
+        #assumptions: self.x increases by self.mesh_size per step
+        #   we can split on curves as well as long as there is no change between curvatures
+        #   there is not a change in curvature on the last mesh point
+
+        differences = np.diff(self.curvatures)
+        min_len = min_partition_len//self.mesh_size
+        track_change_indices = abs(differences) < 10e-5
+        current_pos = 0
+        part_indices = [0]
+        next_change = len(self.r)
+        while len(track_change_indices) > 2 and next_change > 0 and len(part_indices) - 1 < max_parts:
+            next_change = np.argmax(track_change_indices)
+            if next_change > (2 * min_partition_len) and ((current_pos + next_change//2) - part_indices[-1]) > min_len:
+                part_indices.append(current_pos + next_change//2)
+
+            current_pos += next_change
+            track_change_indices = track_change_indices[next_change:]
+
+        return np.split(self.curvatures, part_indices)
+
+    def get_length(self):
+        return self.x[-1]
+    
     # Auto-partition; 
     # S = cumsum(x)
     # partition S by 200m; find nearest i where r[i] = 0 such that 250m is max distance
