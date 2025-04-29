@@ -141,18 +141,21 @@ class Track:
             if is_straight:
                 current_length_of_straight += (self.x[i] - self.x[i - 1])
                 len_since_last_partition += (self.x[i] - self.x[i - 1])
-
-                if current_length_of_straight >= len_straights and len_since_last_partition >= min_partition_len:
+                print(current_length_of_straight, len_since_last_partition, i)
+                if (current_length_of_straight >= min_partition_len) and (len_since_last_partition >= len_straights):
                     indices_to_partition.append(i)
                     current_length_of_straight = 0
                     len_since_last_partition = 0
             else:
+                current_length_of_straight = 0
                 len_since_last_partition += (self.x[i] - self.x[i - 1])
 
         parts = np.split(self.curvatures, indices_to_partition)
 
+        print(indices_to_partition, len(indices_to_partition))
         if len(parts) > max_parts:
             return np.array_split(self.curvatures, max_parts)
+        
 
         return np.split(self.curvatures, indices_to_partition)
     
