@@ -155,6 +155,61 @@ class Track:
         plt.legend()
         plt.grid(True)
         plt.show()
+    def plot_car(self, trackfile, datafile, mesh_size = 0.25):
+        # Initialize arrays for plotting
+        c = pd.read_excel('sims_logs/'+datafile)
+        s, kappa = self.x, self.r
+        x_pos = np.zeros_like(s)  # x positions
+        y_pos = np.zeros_like(s)  # y positions
+        car_x_pos = np.zeros_like(s)  # car x positions
+        car_y_pos = np.zeros_like(s)  # car y positions
+        calc_car_x_pos = np.zeros_like(s)  # car x positions
+        calc_car_y_pos = np.zeros_like(s)  # car y positions
+        theta = np.zeros_like(s)  # Heading angles
+        time = c['time']
+        velocity = c['v']
+        beta = c['beta']
+        xi = c['xi']
+        assert len(s) == len(c), f"Car data and Track data do not match, check mesh size and track name, len(s) = {len(s)}, len(c) = {len(c)}"
+        # Integrate to get the positions and heading angle
+        for i in range(1, len(s)):
+
+            dtheta = kappa[i-1] * (s[i] - s[i-1])
+            theta[i] = theta[i-1] + dtheta
+
+            dx = np.cos(theta[i-1]) * (s[i] - s[i-1])
+            dy = np.sin(theta[i-1]) * (s[i] - s[i-1])
+        
+            x_pos[i] = x_pos[i-1] + dx
+            y_pos[i] = y_pos[i-1] + dy
+            
+            if i < len(c):
+                if time[i]>time[i - 1]:
+                    t = time[i] - time[i - 1]
+                else:
+                    t = time[i]
+                v = velocity[i]
+                
+                angle = theta[i] + beta[i] + xi[i]
+                dv = velocity[i] - velocity[i - 1]
+
+                calc_car_x_pos[i] = np.cos(angle) * calc_car_x_pos[i] + v * t + 1/2 * dv * t
+                calc_car_y_pos[i] = np.sin(angle) * calc_car_x_pos[i] + v * t + 1/2 * dv * t
+
+
+        # Plot the track
+        plt.figure(figsize=(10, 5))
+        plt.plot(x_pos, y_pos, color = 'black', label='Track')
+
+        plt.plot(calc_car_x_pos, calc_car_y_pos, color = 'blue', label = 'Car')
+
+        plt.xlabel('X Position')
+        plt.ylabel('Y Position')
+        plt.title('Track Plot')
+        plt.axis('equal')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
     def plot(self):
         self.plot_track(self.x, self.r)
