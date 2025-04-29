@@ -185,7 +185,7 @@ class Track:
     # partition S by 200m; find nearest i where r[i] = 0 such that 250m is max distance
     # maybe loop back through, find spacings of all r[i] = 0
 
-    def plot_track(s, kappa):
+    def plot_track(self, s, kappa):
         # Initialize arrays for plotting
         x_pos = np.zeros_like(s)  # x positions
         y_pos = np.zeros_like(s)  # y positions
