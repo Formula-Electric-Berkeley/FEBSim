@@ -173,6 +173,7 @@ class BicycleModel:
         print("Initialized track {}".format(trackfile))
         # Break the track into parts splines of curvature
         self.parts = self.tr.split_on_straights(self.tr.get_length()//(parts + 1), 3, parts + 3)
+        print(self.parts)
         self.n_max_unnormalized = 4
         if 'skidpad' in trackfile:
             self.n_max_unnormalized = 1.2
@@ -188,6 +189,8 @@ class BicycleModel:
         self.veh = veh.params
 
     def run(self, simple=False):
+        self.tr.plot()
+        
         dfs = []
 
         init_state = None
@@ -222,7 +225,7 @@ class BicycleModel:
         output_file_name = self.track_file[:-5] + '_' + f'{time.time()}' + '.xlsx'
         save_output(combined_df, output_file_name)
 
-        # TrackPlot.plot_track(self.track_file, output_file_name, self.mesh_size)
+        TrackPlot.plot_track(self.track_file, output_file_name, self.mesh_size)
 
         laptime = sum(df["time"].iloc[-1] for df in dfs if not df.empty)
 
@@ -2001,7 +2004,7 @@ class BicycleModel:
         # solver options
         opts = {"expand": True, 
                 "ipopt": {
-                    "max_iter": 10000,
+                    "max_iter": 2000,
                     "tol": 1e-6,
                     "linear_solver": "mumps",  
                     "hessian_approximation": "limited-memory",  # use L-BFGS instead of exact Hessian
