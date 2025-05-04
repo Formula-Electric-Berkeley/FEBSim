@@ -177,7 +177,7 @@ class BicycleModel:
         # print(self.tr.get_length())
         
         self.x_parts, self.parts, self.indices_to_partition = self.tr.split_on_straights(self.tr.get_length() // 10, 3, 8)
-        # self.tr.plot()
+        self.tr.plot()
         self.tr.plot_track_segments(self.x_parts, self.parts, self.indices_to_partition)
 
         self.n_max_unnormalized = 4
@@ -202,7 +202,6 @@ class BicycleModel:
         for i, part in enumerate(self.parts):
             print("\033[1;92m" + "RUNNING PART {}: ".format(i) + "\033[0m")
             print(part)
-            self.tr.plot_track_segments(np.array([self.x_parts[i]]), np.array([part]), np.array([self.indices_to_partition[i]]))
             
             # Pass init_state so it continues from the last state's final values
             if simple:
@@ -214,7 +213,7 @@ class BicycleModel:
             # If there's a solution, store the final state for the next segment
             if not df_segment.empty:
                 last_row = df_segment.iloc[-1]
-                print("\033[94m" + "LAST ROW: \n" + "\033[0m")
+                print("\033[1;94m" + "LAST ROW:" + "\033[0m")
                 print(last_row)
                 
                 if simple:
@@ -1086,7 +1085,7 @@ class BicycleModel:
 
         # error print in case of failure
         if solver.stats()["return_status"] != "Solve_Succeeded":
-            print("\033[91m" + "ERROR: Optimization did not succeed!" + "\033[0m")
+            print("\033[1;91m" + "ERROR: OPTIMIZATION DID NOT SUCCEED!" + "\033[0m")
 
         # ------------------------------------------------------------------------------------------------------------------
         # EXTRACT SOLUTION -------------------------------------------------------------------------------------------------
