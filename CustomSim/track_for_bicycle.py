@@ -141,7 +141,7 @@ class Track:
             if is_straight:
                 current_length_of_straight += (self.x[i] - self.x[i - 1])
                 len_since_last_partition += (self.x[i] - self.x[i - 1])
-                print(current_length_of_straight, len_since_last_partition, i)
+                # print(current_length_of_straight, len_since_last_partition, i)
                 if (current_length_of_straight >= min_partition_len) and (len_since_last_partition >= len_straights):
                     indices_to_partition.append(i)
                     current_length_of_straight = 0
@@ -152,12 +152,11 @@ class Track:
 
         parts = np.split(self.curvatures, indices_to_partition)
 
-        print(indices_to_partition, len(indices_to_partition))
+        # print(indices_to_partition, len(indices_to_partition))
         if len(parts) > max_parts:
-            return np.array_split(self.curvatures, max_parts)
+            return np.array_split(self.x, max_parts), np.array_split(self.curvatures, max_parts), indices_to_partition
         
-
-        return np.split(self.curvatures, indices_to_partition)
+        return np.split(self.x, indices_to_partition), np.split(self.curvatures, indices_to_partition), indices_to_partition
     
     def split_alt(self, min_partition_len, max_parts):
         #assumptions: self.x increases by self.mesh_size per step
@@ -188,7 +187,48 @@ class Track:
     # partition S by 200m; find nearest i where r[i] = 0 such that 250m is max distance
     # maybe loop back through, find spacings of all r[i] = 0
 
-    def plot_track(self, s, kappa):
+    def plot_track(self, s, kappa, is_seg, x_prev, y_prev, theta_prev, seg_num):
+        # Initialize arrays for plotting
+        x_pos = np.zeros_like(s)  # x positions
+        y_pos = np.zeros_like(s)  # y positions
+        theta = np.zeros_like(s)  # Heading angles
+        
+        x_pos[0] = x_prev
+        y_pos[0] = y_prev
+        theta[0] = theta_prev
+
+        # Integrate to get the positions and heading angle
+        for i in range(1, len(s)):
+            dtheta = kappa[i-1] * (s[i] - s[i-1])
+            theta[i] = theta[i-1] + dtheta
+            dx = np.cos(theta[i-1]) * (s[i] - s[i-1])
+            dy = np.sin(theta[i-1]) * (s[i] - s[i-1])
+            x_pos[i] = x_pos[i-1] + dx
+            y_pos[i] = y_pos[i-1] + dy
+
+        # Plot the track
+        if not is_seg:
+            plt.figure(figsize=(10, 5))
+            plt.plot(x_pos, y_pos, label='Track')
+        else:
+            plt.plot(x_pos, y_pos, label=f"Segment {seg_num}")
+        plt.xlabel('X Position')
+        plt.ylabel('Y Position')
+        plt.title('Track Plot')
+        plt.axis('equal')
+        plt.legend()
+        plt.grid(True)
+        
+        if not is_seg:
+            plt.show()
+            
+        return x_pos[-1], y_pos[-1], theta[-1]
+        
+        
+    def plot_track_segments(self, s_parts, r_parts, indices):
+        s = self.x
+        kappa = self.r
+        
         # Initialize arrays for plotting
         x_pos = np.zeros_like(s)  # x positions
         y_pos = np.zeros_like(s)  # y positions
@@ -202,17 +242,21 @@ class Track:
             dy = np.sin(theta[i-1]) * (s[i] - s[i-1])
             x_pos[i] = x_pos[i-1] + dx
             y_pos[i] = y_pos[i-1] + dy
-
-        # Plot the track
+        
+        x_prev, y_prev, theta_prev = 0, 0, 0
+        
         plt.figure(figsize=(10, 5))
-        plt.plot(x_pos, y_pos, label='Track')
-        plt.xlabel('X Position')
-        plt.ylabel('Y Position')
-        plt.title('Track Plot')
-        plt.axis('equal')
-        plt.legend()
-        plt.grid(True)
+
+        for i in range(len(s_parts)):
+            x_prev, y_prev, theta_prev = self.plot_track(s_parts[i], r_parts[i], True, x_prev, y_prev, theta_prev, i)
+            
+                
+        for idx in indices: 
+            plt.plot(x_pos[idx], y_pos[idx], "ro")
+
         plt.show()
+        
+        
     def plot_car(self, trackfile, datafile, mesh_size = 0.25):
         # Initialize arrays for plotting
         c = pd.read_excel('sims_logs/'+datafile)
