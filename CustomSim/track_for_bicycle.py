@@ -75,13 +75,11 @@ class Track:
         rr = r[unique_indices]
 
 
-        finer_mesh_multiplier = 1
-
         # New fine position vector; this is where we mesh the track
         if np.floor(L) < L:  # check for injecting last point
-            x = np.concatenate([np.arange(0, np.floor(L), self.mesh_size*finer_mesh_multiplier), [L]])
+            x = np.concatenate([np.arange(0, np.floor(L), self.mesh_size), [L]])
         else:
-            x = np.arange(0, np.floor(L), self.mesh_size*finer_mesh_multiplier)
+            x = np.arange(0, np.floor(L), self.mesh_size)
 
         # Distance step vector
         dx = np.diff(x)
@@ -125,39 +123,57 @@ class Track:
     def split(self, parts):
         return np.array_split(self.curvatures, parts)
     
-    def split_on_straights(self, len_straights, min_partition_len, max_parts):
-        #assumptions: starts out on straight
-        is_straight = True
-        current_length_of_straight = self.x[0]
-        len_since_last_partition = self.x[0]
-        indices_to_partition = []
+    def split_on_straights(self, max_parts, min_straight_length=12, min_partition_length=100):
+        total_length = self.x[-1] - self.x[0]
+        candidate_indices = []
+        current_straight_len = 0
+        len_since_last_partition = 0
+        last_partition_index = 0
 
+        # Step 1: Collect valid candidate indices
         for i in range(1, len(self.r)):
-            if abs(self.r[i]) < 10e-5:
-                is_straight = True
-            else:
-                is_straight = False
+            dx = self.x[i] - self.x[i - 1]
+            is_straight = abs(self.r[i]) < 1e-5
 
             if is_straight:
-                current_length_of_straight += (self.x[i] - self.x[i - 1])
-                len_since_last_partition += (self.x[i] - self.x[i - 1])
-                # print(current_length_of_straight, len_since_last_partition, i)
-                if (current_length_of_straight >= min_partition_len) and (len_since_last_partition >= len_straights):
-                    indices_to_partition.append(i)
-                    current_length_of_straight = 0
-                    len_since_last_partition = 0
+                current_straight_len += dx
             else:
-                current_length_of_straight = 0
-                len_since_last_partition += (self.x[i] - self.x[i - 1])
+                current_straight_len = 0
 
-        parts = np.split(self.curvatures, indices_to_partition)
+            len_since_last_partition += dx
 
-        # print(indices_to_partition, len(indices_to_partition))
-        if len(parts) > max_parts:
-            return np.array_split(self.x, max_parts), np.array_split(self.curvatures, max_parts), indices_to_partition
-        
-        return np.split(self.x, indices_to_partition), np.split(self.curvatures, indices_to_partition), indices_to_partition
-    
+            if (
+                is_straight and 
+                current_straight_len >= min_straight_length / 2 and 
+                len_since_last_partition >= min_partition_length
+            ):
+                candidate_indices.append(i)
+                current_straight_len = 0
+                len_since_last_partition = 0
+                last_partition_index = i
+
+        # Step 2: Subsample candidates to match max_parts - 1 (we need N-1 indices to split into N parts)
+        num_requested_splits = max_parts - 1
+        num_available_splits = len(candidate_indices)
+
+        if num_available_splits == 0:
+            # Can't split at all
+            return [self.x], [self.curvatures], []
+
+        if num_available_splits <= num_requested_splits:
+            selected_indices = candidate_indices
+        else:
+            # Spread out selected indices evenly
+            lin_idx = np.linspace(0, num_available_splits - 1, num_requested_splits + 2)[1:-1]
+            selected_indices = [candidate_indices[int(round(i))] for i in lin_idx]
+
+
+        x_parts = np.split(self.x, selected_indices)
+        r_parts = np.split(self.curvatures, selected_indices)
+
+        return x_parts, r_parts, selected_indices
+
+
     def split_alt(self, min_partition_len, max_parts):
         #assumptions: self.x increases by self.mesh_size per step
         #   we can split on curves as well as long as there is no change between curvatures
@@ -187,7 +203,7 @@ class Track:
     # partition S by 200m; find nearest i where r[i] = 0 such that 250m is max distance
     # maybe loop back through, find spacings of all r[i] = 0
 
-    def plot_track(self, s, kappa, is_seg, x_prev, y_prev, theta_prev, seg_num):
+    def plot_track_and_segments(self, s, kappa, is_seg, x_prev, y_prev, theta_prev, seg_num):
         # Initialize arrays for plotting
         x_pos = np.zeros_like(s)  # x positions
         y_pos = np.zeros_like(s)  # y positions
@@ -223,6 +239,32 @@ class Track:
             plt.show()
             
         return x_pos[-1], y_pos[-1], theta[-1]
+    
+    def plot_track(self, s, kappa):
+        # Initialize arrays for plotting
+        x_pos = np.zeros_like(s)  # x positions
+        y_pos = np.zeros_like(s)  # y positions
+        theta = np.zeros_like(s)  # Heading angles
+
+        # Integrate to get the positions and heading angle
+        for i in range(1, len(s)):
+            dtheta = kappa[i-1] * (s[i] - s[i-1])
+            theta[i] = theta[i-1] + dtheta
+            dx = np.cos(theta[i-1]) * (s[i] - s[i-1])
+            dy = np.sin(theta[i-1]) * (s[i] - s[i-1])
+            x_pos[i] = x_pos[i-1] + dx
+            y_pos[i] = y_pos[i-1] + dy
+
+        # Plot the track
+        plt.figure(figsize=(10, 5))
+        plt.plot(x_pos, y_pos, label='Track')
+        plt.xlabel('X Position')
+        plt.ylabel('Y Position')
+        plt.title('Track Plot')
+        plt.axis('equal')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
         
         
     def plot_track_segments(self, s_parts, r_parts, indices):
@@ -248,7 +290,7 @@ class Track:
         plt.figure(figsize=(10, 5))
 
         for i in range(len(s_parts)):
-            x_prev, y_prev, theta_prev = self.plot_track(s_parts[i], r_parts[i], True, x_prev, y_prev, theta_prev, i)
+            x_prev, y_prev, theta_prev = self.plot_track_and_segments(s_parts[i], r_parts[i], True, x_prev, y_prev, theta_prev, i)
             
                 
         for idx in indices: 
