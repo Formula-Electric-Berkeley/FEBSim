@@ -314,4 +314,4 @@ class Track:
         plt.show()
 
     def plot(self):
-        self.plot_track(self.x, self.r)
+        self.plot_track(self.x, self.r, False, 0, 0, 0, 0)
