@@ -32,7 +32,8 @@ def save_output(data, filename, directory='sims_logs/', metadata=None):
         new_filename = f"{base_name}_{counter}{extension}"
         file_path = os.path.join(directory, new_filename)
         counter += 1
-    
+        
+    print(file_path)    
 
     # Write the dataframe to a excel sheet
     with pd.ExcelWriter(file_path, engine="xlsxwriter") as writer:
@@ -65,7 +66,7 @@ class Vehicle:
             if key in self.params:
                 self.params[key] = value
             else:
-                print("\033[93m" + f"Warning: {key} is not a recognized parameter." + "\033[0m")
+                print("\033[93m" + f"\nWarning: {key} is not a recognized parameter." + "\033[0m")
 
     
     def sweep_parameters(self, param_ranges):
@@ -171,13 +172,13 @@ class BicycleModel:
 
     def initialize_track(self, trackfile, mesh_size, parts):
         self.tr = Track(trackfile, mesh_size)
-        print("\033[1;92m" + "INITIALIZED TRACK: {}".format(trackfile) + "\033[0m")
+        print("\033[1;92m" + "\nINITIALIZED TRACK: {}".format(trackfile) + "\033[0m")
         
         # Break the track into parts splines of curvature
         # print(self.tr.get_length())
         
         self.x_parts, self.parts, self.indices_to_partition = self.tr.split_on_straights(self.tr.get_length() // 10, 3, 8)
-        self.tr.plot()
+        #self.tr.plot()
         self.tr.plot_track_segments(self.x_parts, self.parts, self.indices_to_partition)
 
         self.n_max_unnormalized = 4
@@ -199,8 +200,8 @@ class BicycleModel:
 
         init_state = None
         
-        for i, part in enumerate(self.parts):
-            print("\033[1;92m" + "RUNNING PART {}: ".format(i) + "\033[0m")
+        for i, part in enumerate(self.parts[:1]):
+            print("\033[1;92m" + "\nRUNNING PART {}: ".format(i) + "\033[0m")
             print(part)
             
             # Pass init_state so it continues from the last state's final values
@@ -213,7 +214,7 @@ class BicycleModel:
             # If there's a solution, store the final state for the next segment
             if not df_segment.empty:
                 last_row = df_segment.iloc[-1]
-                print("\033[1;94m" + "LAST ROW:" + "\033[0m")
+                print("\033[1;94m" + "\nLAST ROW:" + "\033[0m")
                 print(last_row)
                 
                 if simple:
@@ -254,7 +255,7 @@ class BicycleModel:
 
         energy = sum(df["energy"].iloc[-1] for df in dfs if not df.empty)
 
-        print("\033[1;92" + 'Total laptime is {:.2f} seconds with an energy consumption of {:.2f} kWh'.format(laptime, energy) + "\033[0m")
+        print("\033[1;92" + '\nTotal laptime is {:.2f} seconds with an energy consumption of {:.2f} kWh'.format(laptime, energy) + "\033[0m")
 
         return laptime, energy
 
@@ -626,7 +627,7 @@ class BicycleModel:
             / x_s
         )
 
-        print("\033[1;92m" + "DYNAMICS DEFINED" + "\033[0m")        
+        print("\033[1;92m" + "\nDYNAMICS DEFINED" + "\033[0m")        
         # ------------------------------------------------------------------------------------------------------------------
         # CONTROL BOUNDARIES -----------------------------------------------------------------------------------------------
         # ------------------------------------------------------------------------------------------------------------------
@@ -1066,7 +1067,7 @@ class BicycleModel:
         # solver options
         opts = {"expand": True, 
                 "ipopt": {
-                    "max_iter": 5000,
+                    "max_iter": 20000,
                     "tol": 1e-6,
                     "linear_solver": "mumps",  
                     "hessian_approximation": "limited-memory",  # use L-BFGS instead of exact Hessian
@@ -1085,7 +1086,7 @@ class BicycleModel:
 
         # error print in case of failure
         if solver.stats()["return_status"] != "Solve_Succeeded":
-            print("\033[1;91m" + "ERROR: OPTIMIZATION DID NOT SUCCEED!" + "\033[0m")
+            print("\033[1;91m" + "\nERROR: OPTIMIZATION DID NOT SUCCEED!" + "\033[0m")
 
         # ------------------------------------------------------------------------------------------------------------------
         # EXTRACT SOLUTION -------------------------------------------------------------------------------------------------
