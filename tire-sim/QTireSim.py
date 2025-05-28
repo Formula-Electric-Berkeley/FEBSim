@@ -1,13 +1,16 @@
 from typing import List
-import sys
+import sys, os
 
 import pandas as pd
 import numpy as np
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, least_squares
 from sklearn.metrics import r2_score
 import plotly.graph_objects as go # Nick did this, idk if it's standard but it's cute cause then you get go.Figure()
 from plotly.subplots import make_subplots
+import plotly
 
+# plotly.io.orca.config.executable = '../../../../AppData/Local/Programs/orca'
+# C:\Users\qhcbe\Documents\coding\FEB\FEBSim\TireSim
 def format_float(x, sig_digits=3):
     # Round to 3 significant digits
     rounded = f"{x:5G}"
@@ -149,7 +152,7 @@ def bin_figs(data_binned : List[pd.DataFrame], params_binned : List[tuple[float,
 
     for i in range(FZ_BIN_COUNT):
         data_bin = data_binned[i]
-        graph_domain = np.linspace(min(data_bin["SA deg"]), max(data_bin["SA deg"]), 500)
+        graph_domain = np.linspace(min(data_bin["SA deg"]) - 10, max(data_bin["SA deg"]) + 10, 500)
 
         # Draw scatterplot of data
         fig.add_trace(
@@ -266,48 +269,141 @@ def find_radius_conversion():
     starting_radius_data = get_run_data([68, 71, 72, 73])
     target_radius_data = get_run_data([4, 5, 6, 8, 9])
 
-all_data = get_run_data(SELECTED_RUNS)
-print(all_data["FY N"].max())
+def surface_fig(all_data : pd.DataFrame, params_binned : List[tuple[float, float, float, float ,float]], Fz_bins : List[tuple[float, float]]) -> go.Figure:
+    hyper_coefficients = []
+    
+    for i in range(5):
+        values_for_this_param = params_binned[:,i] # ith column
+        Fz_medians = [(ub + lb) / 2 for lb, ub in Fz_bins]
 
-fig = go.Figure()
-fig.add_trace(
-        go.Scatter(
-            x=all_data["SA deg"],
-            y=all_data["FY N"],
-            mode="markers", 
-            marker=dict(color=all_data["FZ N"], colorscale="Viridis", showscale=True, colorbar=dict(title="Load Force (N)")),
+        coefficients, _ = curve_fit(PACEJKA_PARAM_FIT_FNS[i], Fz_medians, values_for_this_param, maxfev=150000, p0=PACEJKA_PARAM_FIT_GUESS[i])
+        hyper_coefficients.append(coefficients)
+
+    # Define the Pacejka Magic Formula for lateral force (FY) with five coefficients
+    def mvar_pacejka(alpha, Fz):
+        B, C, D, E, F = [PACEJKA_PARAM_FIT_FNS[i](Fz, *hyper_coefficients[i]) for i in range(5)]
+
+        return D * np.sin(C * np.arctan(B * alpha - E * (B * alpha - np.arctan(B * alpha))) + F)
+
+    Fz_domain = np.linspace(all_data["FZ N"].min(), -225, 100)
+    SA_domain = np.linspace(all_data["SA deg"].min(), all_data["SA deg"].max(), 100)
+
+    Fy_surface = np.zeros(shape=(len(Fz_domain), len(SA_domain)))
+    for i in range(len(Fz_domain)):
+        for j in range(len(SA_domain)):
+            Fy_surface[j][i] = mvar_pacejka(SA_domain[j], Fz_domain[i])
+
+    fig = go.Figure(data=[go.Surface(
+        x=Fz_domain,
+        y=SA_domain,
+        z=Fy_surface
+    )])
+
+    CA_YELLOW = "#FDB515"
+    BK_BLUE = "#002676"
+
+    LABEL_COLOR = BK_BLUE
+    TICK_COLOR = CA_YELLOW
+    
+    SCENE_BACKGROUND = "white" #"Greenscreen", to photoshop out background
+    PLANE_COLOR = "#242424"
+
+    fig.update_layout(
+        scene=dict(
+            bgcolor=SCENE_BACKGROUND,
+            xaxis=dict(
+                gridcolor=TICK_COLOR,
+                title=dict(text='Load Force (N)', font=dict(color=LABEL_COLOR, size=30)),
+                tickfont=dict(color=LABEL_COLOR, size=22),
+                showbackground=True,
+                backgroundcolor=PLANE_COLOR
+            ),
+            yaxis=dict(
+                gridcolor=TICK_COLOR,
+                title=dict(text='Slip Angle (deg)', font=dict(color=LABEL_COLOR, size=30)),
+                tickfont=dict(color=LABEL_COLOR, size=22),
+                showbackground=True,
+                backgroundcolor=PLANE_COLOR
+            ),
+            zaxis=dict(
+                gridcolor=TICK_COLOR,
+                title=dict(text='Lateral Force (N)', font=dict(color=LABEL_COLOR, size=30)),
+                tickfont=dict(color=LABEL_COLOR, size=22),
+                showbackground=True,
+                backgroundcolor=PLANE_COLOR
+            ),
+        ),
+        title=dict(
+            x=0.5,
+            xanchor='center',
+            text='Lateral Force vs Load Force and Slip Angle',
+            font=dict(
+                size=36,
+            )
         )
     )
+    
+    return fig
 
-# fig.update_layout(title_text=f"Fy (N) over SA (deg) for all quality 16x7.5 cornering rundata")
-
-# fig.write_html("QVis.html")
-
-# sys.exit(0)
-
+# Get all data, filtering for specific outliers.
 all_data = get_run_data(SELECTED_RUNS)
 all_data = all_data[all_data["FZ N"] < -150]
 
-Fz_bins = [(-1300, -1000), (-1000, -750), (-750, -500), (-500, -300), (-300, -150)] # Empirically found by looking at graph.
-all_data_binned = Fz_bin_data(all_data, Fz_bins)
+# Fz_bins = [(-1300, -1000), (-1000, -750), (-750, -500), (-500, -300), (-300, -150)] # Empirically found by looking at graph.
+# all_data_binned = Fz_bin_data(all_data, Fz_bins)
 
-params_binned = np.array(list(map(get_pacejka_params, all_data_binned)))
+# # Find pacejka parameters for each of the binned datasets
+# params_binned = np.array(list(map(get_pacejka_params, all_data_binned)))
+# for i in range(FZ_BIN_COUNT):
+#     print(f"Pacejka params for bin {i}:", params_binned[i])
 
-for i in range(FZ_BIN_COUNT):
-    print(f"Pacejka params for bin {i}:", params_binned[i])
+#     r2_val = r2_score(all_data_binned[i]["FY N"], pacejka_model(all_data_binned[i]["SA deg"], *params_binned[i]))
+#     print("R2:", r2_val)
 
-    r2_val = r2_score(all_data_binned[i]["FY N"], pacejka_model(all_data_binned[i]["SA deg"], *params_binned[i]))
-    print("R2:", r2_val)
+# # Create visualizations
 
-print(params_binned)
+# new_fig = surface_fig(all_data, params_binned, Fz_bins)
+# # os.makedirs("fy_out/figures", exist_ok=True)
+# new_fig.write_html("fy_out/figures/3d_plot.html")
+# # new_fig.write_image("fy_out/figures/3d_plot.png", "png", engine="orca")
 
-new_fig = coefficient_figs(params_binned, Fz_bins)
-new_fig.write_html("fy_out/figures/coefficient_plot.html")
+# Define the Pacejka Magic Formula for lateral force (FY) with five coefficients
+def mod_pacejka_model(alpha, Fz, B, C, E, F, Dm, Db):
+    return (Dm * Fz + Db) * np.sin(C * np.arctan(B * alpha - E * (B * alpha - np.arctan(B * alpha))) + F)
 
-new_fig = bin_figs(all_data_binned, params_binned, Fz_bins)
-new_fig.write_html("fy_out/figures/binned_data_plot.html")
+# Residuals function for least_squares
+def residuals(params):
+    B, C, E, F = params[:4]  # Global params
+    Dm, Db = params[4:6]
 
-new_fig = bins_single_fig(all_data_binned, params_binned, Fz_bins)
-new_fig.write_html("fy_out/figures/binned_data_single_plot.html")
+    alpha = np.deg2rad(all_data['SA deg'].values)
+    Fz = all_data["FZ N"].values
+    FY = all_data['FY N'].values
+    FY_pred = mod_pacejka_model(alpha, Fz, B, C, E, F, Dm, Db)
+    
+    return FY_pred - FY
+
+# Initial guess: [B0, C0, E0, F0, D0_dataset0, D0_dataset1, ..., D0_datasetN]
+p0 = [-0.1529849279610816, 1.6566112648010622, 0.35726413344630986, 0.028945686691346905] + [-1.70499, 165.3188]
+
+# Least squares fitting
+result = least_squares(residuals, p0)
+
+# Extract fitted parameters
+popt = [float(x) for x in list(result.x)]
+
+# params_binned = [(popt[0:4] + [popt[i]]) for i in range(4, 4 + len(all_data_binned))]
+
+print(popt)
+
+r2_val = r2_score(all_data["FY N"], mod_pacejka_model(all_data["SA deg"], all_data["FZ N"], *popt))
+print("R2:", r2_val)
+
+# new_fig = coefficient_figs(params_binned, Fz_bins)
+# new_fig.write_html("fy_out/figures/coefficient_plot.html")
+
+# new_fig = bin_figs(all_data_binned, params_binned, Fz_bins)
+# new_fig.write_html("fy_out/figures/binned_data_plot.html")
+
 
 sys.exit(0)
