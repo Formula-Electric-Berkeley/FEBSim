@@ -1,0 +1,29 @@
+_______                    ____________________________________ __
+__  __ \______________________  __/__  __ \__    |_  ____/__  //_/
+_  / / /__  __ \  _ \_  __ \_  /  __  /_/ /_  /| |  /    __  ,<   
+/ /_/ /__  /_/ /  __/  / / /  /   _  _, _/_  ___ / /___  _  /| |  
+\____/ _  .___/\___//_/ /_//_/    /_/ |_| /_/  |_\____/  /_/ |_|  
+       /_/                                                        
+==================================================================
+Michigan 2014.xlsx
+File read successfully
+==================================================================
+Name:          Michigan 2014
+City:          Michigan
+Country:       USA
+Type:          Permanent
+Configuration: Closed
+Direction:     Forward
+Mirror:        Off
+Date:          29/01/2024
+Time:          22:30:58
+==================================================================
+Track generation started.
+Pre-processing completed.
+Coarse meshing completed.
+Fine meshing completed with mesh size: 0.25 [m]
+{'rotz' requires <a href="matlab:matlab.internal.addons.launchers.showExplorer('ErrorRecovery', 'identifier', 'AR', 'focused', 'rotz');">Phased Array System Toolbox</a>.
+
+Error in <a href="matlab:matlab.internal.language.introspective.errorDocCallback('OpenTRACK', 'C:\Users\EJDRO\OneDrive\Documents\GitHub\FEBSim\OpenLap\OpenTRACK.m', 407)" style="font-weight:bold">OpenTRACK</a> (<a href="matlab: opentoline('C:\Users\EJDRO\OneDrive\Documents\GitHub\FEBSim\OpenLap\OpenTRACK.m',407,0)">line 407</a>)
+    xyz = rotz(angle_head(i-1))*[dx(i-1);0;0]+p ;
+} 

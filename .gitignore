@@ -2,3 +2,4 @@
 
 # Ignore all the generated motor_curves
 custom sim/motor_curves/capped_curve*.csv 
+
