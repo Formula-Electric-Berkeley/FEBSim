@@ -300,8 +300,6 @@ def simulate(pack):
         # DC power = I * V -> gets I for pack
         # To get current going through the motor, we need to do more inverter magic 
 
-        cell_data = pack.get_cell_data()
-
         # if we ever exceed our software-maxed current, decrease our power to target_power
         P = 0.05 # how quickly should we decrement TPS? TPS is zero to 1; reduce by 5% each time
 
@@ -334,11 +332,11 @@ def simulate(pack):
 
 
         # Get cell data for transient output
-        cell_data = pack.get_cell_data()
+        pack_data = pack.get_pack_data()
 
-        accumulator_voltage = cell_data["voltage"]
+        accumulator_voltage = pack_data["voltage"]
         pack_voltages.append(accumulator_voltage)
-        pack_discharges.append(cell_data["discharge"])
+        pack_discharges.append(pack_data["discharge"])
         basespeed, kv_est = motor.calculate_base_speed(accumulator_voltage, power)
         mot_powers.append(power)
         base_speeds.append(basespeed)
