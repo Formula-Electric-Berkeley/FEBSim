@@ -3,7 +3,6 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
-import casadi as ca
 from scipy.interpolate import Rbf
 import matplotlib.pyplot as plt
 import os
@@ -76,8 +75,6 @@ class motor():
         # sourced from https://isopack.blogspot.com/2017/08/fun-with-interior-permanent-magnet.html
 
         return torque_Nm * 2/ (3 * self.N_P * self.LAMBDA) 
-
-
 
     def calculate_back_emf(self, motor_rpm, torque_Nm):
 
@@ -159,7 +156,6 @@ class motor():
         # Define interpolator for motor efficiency
         self.rbf = Rbf(df_all['motor_speed'], df_all['motor_torque'], df_all['efficiency'], function='linear')
 
-
         # Plot the efficiency curve
 
         def plot_motor_eff():
@@ -181,8 +177,6 @@ class motor():
     def interpolate_efficiency(self, speed, torque):
         efficiency_est = self.rbf(speed, torque)
         return efficiency_est
-
-    
 
 class drexler_differential():
     def __init__(self):

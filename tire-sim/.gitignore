@@ -1,6 +1,9 @@
-bins_plot.html
-coeff_plot.html
-QVis.html
-
 tirecsvfiles
 tiredatfiles
+RunData*
+
+fy_out/*
+fx_out/*
+
+SN5_R9_*
+.ipynb_checkpoints

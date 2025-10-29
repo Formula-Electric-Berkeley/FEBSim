@@ -8,8 +8,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-import powertrain_model
-motor = powertrain_model.motor()
+import powertrain
+motor = powertrain.motor()
 
 def read_info(workbook_file, sheet_name=1, start_row=2, end_row=10000, cols="B:C"):
     # Setup the Import Options
@@ -41,7 +41,7 @@ def get_torque(rpm):
     g = max_raw_torque
     return min(f, g)
 
-filename = 'vehicle_files/FEB_SN3_30kW.xlsx'
+filename = 'vehicle_files/FEB_SN5.xlsx'
 
 info = read_info(filename,'Info')
 data = read_info(filename,'Torque Curve', cols="A:B")
@@ -214,9 +214,6 @@ beta = tyre_radius/(br_disc_d/2-br_pad_h/2)/br_pist_a/br_pad_mu/4 # [Pa/N] per w
 #a/b/c = a/(b*c)
 phi = br_mast_a/br_ped_r*2 # [-] for both systems
 
-
-
-
 # Powertrain Model
 
 motor_speeds = data.loc[:, "Variable"] #rpm
@@ -272,9 +269,9 @@ if drive == 'RWD':
     factor_aero = (1-da)        # aero distribution
     driven_wheels = 2           # number of driven wheels
 elif drive == 'FWD':
-        factor_drive = df 
-        factor_aero = da 
-        driven_wheels = 2 
+    factor_drive = df 
+    factor_aero = da 
+    driven_wheels = 2 
 else: #AWD
     factor_drive = 1 
     factor_aero = 1 

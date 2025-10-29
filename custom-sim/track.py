@@ -4,7 +4,6 @@ from scipy.interpolate import interp1d
 from scipy.interpolate import pchip_interpolate
 
 
-
 def read_info(workbook_file, sheet_name=1, start_row=2, end_row=10000, cols="A:C"):
     # Setup the Import Options
     opts = pd.io.excel.read_excel(workbook_file, sheet_name, header=None, skiprows=start_row-1, nrows=end_row-start_row+1, usecols=cols)
@@ -22,12 +21,9 @@ mode = 'shape data'
 # meshing
 mesh_size = 0.25 # [m]
 
-
 # Track excel file selection
-filename = 'track_files/test_track.xlsx'
+filename = 'track_files/Michigan_2021_Endurance.xlsx'
 info = read_info(filename,'Shape')
-
-
 
 #Getting Curvature
 R = info.loc[:, "Corner Radius"] #0 or NaN on straights, otherwise a float
@@ -108,7 +104,7 @@ track_widths = np.ones(len(dx))*4.0
 factor_grip = np.ones(n)
 bank = np.zeros(n)
 incl = np.zeros(n)
-info.config = 'Closed'
+info.config = 'Open'
 
 curvatures = r
 
