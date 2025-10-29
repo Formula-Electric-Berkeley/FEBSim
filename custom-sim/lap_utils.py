@@ -70,8 +70,6 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
     # Getting track data
     dx = tr.dx[j]
     r = tr.r[j]
-    incl = tr.incl[j]
-    bank = tr.bank[j]
     factor_grip = tr.factor_grip[j] * veh.factor_grip
     g = 9.81
     
@@ -87,21 +85,19 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
     
     # External forces
     M = veh.M
-    Wz = M * g * np.cos(np.radians(bank)) * np.cos(np.radians(incl))
-    Wy = -M * g * np.sin(np.radians(bank))
-    Wx = M * g * np.sin(np.radians(incl))
-    Aero_Df = 0.5 * veh.rho * veh.factor_Cl * veh.Cl * veh.A * v**2
-    Aero_Dr = 0.5 * veh.rho * veh.factor_Cd * veh.Cd * veh.A * v**2
-    Roll_Dr = veh.Cr * (-Aero_Df + Wz)
-    Wd = (factor_drive * Wz + (-factor_aero * Aero_Df)) / driven_wheels
+    W = M * g
+    Aero_Df = 0.5 * veh.rho * veh.factor_Cl * veh.Cl * veh.A * v ** 2
+    Aero_Dr = 0.5 * veh.rho * veh.factor_Cd * veh.Cd * veh.A * v ** 2
+    Roll_Dr = veh.Cr * (- Aero_Df + W)
+    Wd = (factor_drive * W + ( -factor_aero * Aero_Df)) / driven_wheels
     
     # Overshoot acceleration
-    ax_max = mode * (v_max_next**2 - v**2) / (2 * dx)
-    ax_drag = (Aero_Dr + Roll_Dr + Wx) / M
+    ax_max = mode * (v_max_next ** 2 - v ** 2) / (2 * dx)
+    ax_drag = (Aero_Dr + Roll_Dr) / M
     ax_track_limit = ax_max - ax_drag # same as ax_needed in OpenLap
     
     # Current lateral acceleration
-    ay = v**2 * r + g * np.sin(np.radians(bank))
+    ay = r * (v ** 2)
     
     # Tyre force prefactors
     dmy = factor_grip * veh.sens_y
@@ -111,16 +107,15 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
     mux = factor_grip * veh.mu_x
     Nx = veh.mu_x_M * g
 
-
     # Modify Fz, Wd
-    Fz = load_sensitivity(Wz - Aero_Df)
+    Fz = load_sensitivity(W - Aero_Df)
     Wd = load_sensitivity(Wd)
     
     if np.sign(ay) != 0:
-        ay_max = (1 / M) * (np.sign(ay) * (muy + dmy * (Ny - (Fz) / 4)) * (Fz) + Wy)
+        ay_max = (1 / M) * (np.sign(ay) * (muy + dmy * (Ny - (Fz) / 4)) * (Fz))
         if np.abs(ay / ay_max) > 1:
-            #print("THIS SHOULD NOT HAPPEN")
-            ellipse_multi = 0 #just a check to be safe
+            ratio = np.clip(ay / ay_max, -1, 1)
+            ellipse_multi = np.sqrt(1 - ratio**2)
         else:
             ellipse_multi = np.sqrt(1 - (ay / ay_max)**2)
     else:
@@ -131,30 +126,35 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
         ax_tyre_max = (1 / M) * (mux + dmx * (Nx - Wd)) * Wd * driven_wheels
         ax_tyre = ax_tyre_max * ellipse_multi
         engine_force_func = interp1d(veh.vehicle_speed, veh.factor_power * veh.fx_engine)
-        ax_power_limit = (1 / M) * engine_force_func(v)
+        ax_power_limit = (1 / M) * engine_force_func(min(39.74397137257129, v))
         scale = min([ax_tyre, ax_track_limit]) / ax_power_limit
-        tps = max([min([1, scale]), 0]) #possible check
+        tps = max(min(1, scale), 0) #possible check
         bps = 0
         ax_com = tps * ax_power_limit
     else:
         ax_tyre_max = -(1 / M) * (mux + dmx * (Nx - (Fz) / 4)) * (Fz)
         ax_tyre = ax_tyre_max * ellipse_multi
         fx_tyre = min([-ax_tyre, -ax_track_limit]) * M
-        bps = max([fx_tyre, 0]) * veh.beta #again possible check
+        bps = max([fx_tyre, 0]) * veh.beta
         tps = 0
         ax_com = -min([-ax_tyre, -ax_track_limit])
     
     # Final results
     ax = ax_com + ax_drag
-    v_next = np.sqrt(v**2 + 2 * mode * ax * dx)
+    v_next = np.sqrt(v ** 2 + 2 * mode * ax * dx)
+
+    # if mode == -1:
+    #     print(f"ax max: {ax_max}, ax drag: {ax_drag} => ax track limit: {ax_track_limit}")
+    #     print(f"v max next: {v_max_next}, v: {v}, v next: {v_next}, tire ax {ax_com}, ax {ax}")
+    #     print(f"ax wiggle room: {ax_max - ax}")
+    #     print(f"velocity wiggle room: {v_max_next - v_next}, {v_next / v_max_next}")
+    #     print()
     
     if tps > 0 and v / v_next >= 0.999:
         tps = 1
     
     # Checking for overshoot
-    if v_next / v_max_next > 1: 
-        #print(v_next, "   ", v_max_next)
-        #print("Overshoooot")
+    if round(v_next / v_max_next, 3) > 1:
         overshoot = True
         v_next = np.inf
         ax = 0
@@ -162,7 +162,9 @@ def vehicle_model_comb(veh, tr, v, v_max_next, j, mode):
         tps = -1
         bps = -1
     
-    return v_next, ax, ay, tps, bps, overshoot        
+    # print(bps)
+
+    return v_next, ax, ay, tps, bps, overshoot
         
 # Adjusts torque to keep accumulator safe
 def adjust_torque(veh, tr, TPS_MAX, j, v, v_max_next):
@@ -245,16 +247,11 @@ def adjust_torque(veh, tr, TPS_MAX, j, v, v_max_next):
     
     # All subsequent velocities must be capped at v_next until the next point of throttle
     return v_next, tps, bps
-    
-
-        
 
 def vehicle_model_lat(veh, tr, p):
     # Initialisation
     g = 9.81
     r = tr.r[p]
-    incl = tr.incl[p]
-    bank = tr.bank[p]
     factor_grip = tr.factor_grip[p] * veh.factor_grip
     
     # Vehicle data
@@ -266,27 +263,8 @@ def vehicle_model_lat(veh, tr, p):
     M = veh.M
     
     # Normal load on all wheels
-    Wz = M * g * np.cos(np.radians(bank)) * np.cos(np.radians(incl))
-    
-    # Induced weight from banking and inclination
-    Wy = -M * g * np.sin(np.radians(bank))
-    Wx = M * g * np.sin(np.radians(incl))
-    '''
-    # Z-axis forces
-    fz_mass = -M * g
-    fz_aero = 0.5 * veh.rho * veh.factor_Cl * veh.Cl * veh.A * veh.vehicle_speed**2
-    fz_total = fz_mass + fz_aero
-    
-    # X-axis forces
-    fx_aero = 0.5 * veh.rho * veh.factor_Cd * veh.Cd * veh.A * veh.vehicle_speed**2
-    fx_roll = veh.Cr * np.abs(fz_total)
-    
-    # Drag limitation
-    idx = np.argmin(np.abs(veh.factor_power * veh.fx_engine + fx_aero + fx_roll + Wx))
-    v_drag_thres = 0  # [m/s]
-    v_drag = veh.vehicle_speed[idx] + v_drag_thres
-    '''
-    
+    Wz = M * g
+
     # Speed solution
     if r == 0:  # Straight (limited by engine speed limit or drag)
         v = veh.v_max
@@ -304,11 +282,10 @@ def vehicle_model_lat(veh, tr, p):
 
         Wz = load_sensitivity(Wz)
         
-        
         # TODO; change this to the proper values
-        a = -np.sign(r) * dmy / 4 * D**2
+        a = - np.sign(r) * dmy / 4 * D ** 2
         b = np.sign(r) * (muy * D + (dmy / 4) * (Ny * 4) * D - 2 * (dmy / 4) * Wz * D) - M * r
-        c = np.sign(r) * (muy * Wz + (dmy / 4) * (Ny * 4) * Wz - (dmy / 4) * Wz**2) + Wy
+        c = np.sign(r) * (muy * Wz + (dmy / 4) * (Ny * 4) * Wz - (dmy / 4) * Wz**2)
         
         if a == 0:
             v = np.sqrt(-c / b)
@@ -335,20 +312,22 @@ def vehicle_model_lat(veh, tr, p):
         while adjust_speed:
             Aero_Df = 0.5 * veh.rho * veh.factor_Cl * veh.Cl * veh.A * v**2
             Aero_Dr = 0.5 * veh.rho * veh.factor_Cd * veh.Cd * veh.A * v**2
-            Roll_Dr = veh.Cr * (-Aero_Df + Wz)
+
+            # print(veh.rho, veh.factor_Cl, veh.Cl, veh.A, v)
+
+            Roll_Dr = veh.Cr * (- Aero_Df + Wz)
             Wd = (factor_drive * Wz + (-factor_aero * Aero_Df)) / driven_wheels
-            
-            ax_drag = (Aero_Dr + Roll_Dr + Wx) / M
+
+            ax_drag = (Aero_Dr + Roll_Dr) / M
 
             # Modify Fz, Wd
             Fz = load_sensitivity(Wz - Aero_Df)
             Wd = load_sensitivity(Wd)
-    
-            
+
             ay_max = np.sign(r) / M * (muy + dmy * (Ny - (Fz) / 4)) * (Fz)
-            
-            ay_needed = v**2 * r + g * np.sin(np.radians(bank))
-            
+
+            ay_needed = r * (v ** 2)
+
             if ax_drag <= 0:
                 ax_tyre_max_acc = 1 / M * (mux + dmx * (Nx - Wd)) * Wd * driven_wheels
                 engine_force_func = interp1d(veh.vehicle_speed, veh.factor_power * veh.fx_engine)
@@ -356,7 +335,7 @@ def vehicle_model_lat(veh, tr, p):
                 ay = ay_max * np.sqrt(1 - (ax_drag / ax_tyre_max_acc)**2)
                 ax_acc = ax_tyre_max_acc * np.sqrt(max(0, 1 - (ay_needed / ay_max)**2))
                 scale = min([-ax_drag, ax_acc]) / ax_power_limit
-                tps = max([min([1, scale]), 0])              
+                tps = max([min([1, scale]), 0])
                 bps = 0
             else:
                 ax_tyre_max_dec = -1 / M * (mux + dmx * (Nx - (Fz) / 4)) * (Fz)
@@ -367,8 +346,7 @@ def vehicle_model_lat(veh, tr, p):
                 tps = 0
             
             if ay / ay_needed < 1:
-                v = np.sqrt((ay - g * np.sin(np.radians(bank))) / r) - 1E-3
-        
+                v = np.sqrt(ay / r) - 1E-3
             else:
                 adjust_speed = False
     
@@ -379,10 +357,6 @@ def other_points(i, i_max):
     i_rest = np.arange(0, i_max)
     i_rest = np.delete(i_rest, i)
     return i_rest
-
-
-
-
 
 # simulate laptime for straight line acceleration; assume negligible battery drain
 def simulate_accel(veh, starting_voltage):
