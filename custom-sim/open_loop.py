@@ -143,10 +143,10 @@ def simulate_mainloop(veh, tr):
                             counter += 1
                             break
                     elif tr.info.config == 'Open':
-                        if j == tr.n - 1 and mode == 1:  # Made it to the end
-                            flag[j, k] = True #flag_update(flag, j, k, prg_size, logid, prg_pos)
+                        if j == tr.n - 1 and mode == 1: # Made it to the end
+                            flag[j, k] = True
                             break
-                        if j == 1 and mode == -1:  # Made it to the start
+                        if j == 1 and mode == -1: # Made it to the start
                             flag[j, k] = True
                             break
 
