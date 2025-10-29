@@ -40,39 +40,40 @@ class Molicel_Cell_21700:
 class Pack:
     def __init__(self, cell_type):
         self.cell_type = cell_type
+
     def pack(self, series, parallel, segment):
         cell_data = self.cell_type.cell_data
 
-        pack_series = series * segment
-
-        # Initialize pack data
-        self.pack_series = pack_series
+        self.pack_series = series * segment
         self.parallel = parallel
         self.series = series
 
+        # Initialize pack data
         self.pack_data = {}
 
-        self.pack_data["name"] = f"{pack_series}s{parallel}p_Pack"
-        self.pack_data["cell_count"] = parallel * pack_series
+        self.pack_data["name"] = f"{self.pack_series}s{parallel}p_Pack"
+        self.pack_data["cell_count"] = series * parallel * segment
 
-        self.pack_data["weight"] = round(cell_data["weight"] * (parallel * pack_series), 3) # g
+        self.pack_data["weight"] = round(cell_data["weight"] * (parallel * self.pack_series), 3) # g
         self.pack_data["length"] = round(cell_data["length"] * segment, 3) # mm
-        self.pack_data["min_v"] = round(cell_data["min_v"] * pack_series, 3) # V
-        self.pack_data["nom_v"] = round(cell_data["nom_v"] * pack_series, 3) # V
-        self.pack_data["max_v"] = round(cell_data["max_v"] * pack_series, 3) # V
+        self.pack_data["min_v"] = round(cell_data["min_v"] * self.pack_series, 3) # V
+        self.pack_data["nom_v"] = round(cell_data["nom_v"] * self.pack_series, 3) # V
+        self.pack_data["max_v"] = round(cell_data["max_v"] * self.pack_series, 3) # V
 
-        self.pack_data["DCIR"] = round(parallel / (cell_data["DCIR"] * pack_series), 3)
-        self.pack_data["capacity"] = round(cell_data["capacity"] * parallel * pack_series, 3) # Wh
+        self.pack_data["DCIR"] = round(parallel / (cell_data["DCIR"] * self.pack_series), 3)
+        self.pack_data["capacity"] = round(cell_data["capacity"] * parallel * self.pack_series, 3) # Wh
         
         # Initialize voltage to max
         self.pack_data["voltage"] = self.pack_data["max_v"]
 
-        # Initialize safe minimum voltage
-        #self.pack_data["min_v"] = 400.0
-
         # Initialize total discharge from accumulator
         self.pack_data["discharge"] = 0
+
+        self.discharge_currents = self.cell_type.discharge_curve_currents
         self.discharge_polynomials = discharge_curves_molicell.return_polynomials()
+        # self.discharge_function = self.generate_discharge_function()
+
+        self.discharge_derivatives = [poly.deriv() for poly in self.discharge_polynomials]
 
         self.drain_error = False # have we over-drained this pack?
         self.breaker_popped = False # did we exceed our current max?
@@ -81,7 +82,6 @@ class Pack:
         self.safe_voltage = 400
         
         print("Creating a new pack of voltage {} V and capacity {} kWh".format(self.pack_data["voltage"], self.pack_data["capacity"] / 1000))
-        return self
 
     # get the voltage of a cell given the capacity and target_current for the drainage
     # if we know our initial voltage, next-step capacity, and current, this tells us the next voltage
@@ -136,14 +136,12 @@ class Pack:
 
     # gets dV/dQ at our desired capacity and current
     def get_derivative(self, capacity, target_current):
-        currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps; use this for Molicell
-        # currents = [0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0]   # Use this for Energus (SN3)
+        currents = [0.84, 4.2, 10, 20, 30] # A # Molicel
 
         # calculate the numerical derivative of V with respect to Capacity for each curve
-        derivatives = [p.deriv() for p in self.discharge_polynomials]
         known_derivatives = []
 
-        for d in derivatives:
+        for d in self.discharge_derivatives:
             # Predicted voltage at this capacity from each of the constant-current polynomials 
             known_derivatives.append(d(capacity))
 
@@ -173,10 +171,8 @@ class Pack:
 
         # --- Current cap / breaker logic ---
         # current_cap = self.parallel * 45  # Max allowed current per parallel string
-        # current_cap = 45 # A
-        current_cap = 90 # A
-
-        #print(current_per_cell)
+        current_cap = 45 # A
+        # current_cap = 90 # A
 
         self.breaker_popped = False
 
@@ -210,20 +206,18 @@ class Pack:
             # Convert Wh to mAh for derivative calculation
             dQ_per_cell_mAh = 1000.0 * energy_per_cell_Wh / self.pack_data["nom_v"]
 
-
             # Current per cell in Amps already computed above
             dV_dQ_cell = self.get_derivative(
                 1000.0 * (self.pack_data["discharge"] / (self.pack_series * self.parallel)) / self.pack_data["nom_v"],
                 current_per_cell
             )
-            print(1000.0 * (self.pack_data["discharge"] / (self.pack_series * self.parallel)) / self.pack_data["nom_v"])
-            print(current_per_cell)
-            print(dV_dQ_cell)
-            print(  )
-            print()
+            # print(1000.0 * (self.pack_data["discharge"] / (self.pack_series * self.parallel)) / self.pack_data["nom_v"])
+            # print(current_per_cell)
+            # print(dV_dQ_cell)
+            # print(dV_dQ_cell * dQ_per_cell_mAh * self.pack_series * self.parallel)
 
             # --- Update per-cell voltage ---
-            new_cell_voltage = self.pack_data["voltage"] + dV_dQ_cell * dQ_per_cell_mAh
+            new_cell_voltage = self.pack_data["voltage"] + dV_dQ_cell * dQ_per_cell_mAh * self.pack_series
 
             # Enforce safe voltage limits
             if new_cell_voltage > self.pack_data["min_v"] and self.pack_data["discharge"] < self.pack_data["capacity"]:
@@ -258,7 +252,6 @@ def test_pack(series, parallel, segment):
     currents = [0.84, 4.2, 10, 20, 30] # constant-current values for our traces in Amps; use for Molicell
 
     # currents = [0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0] # use for energus
-
 
     pack = Pack()
     pack.pack(series, parallel, segment)        # .pack() initializes and resets the accumulator

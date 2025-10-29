@@ -9,11 +9,13 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
+import sys
+
 # import our accumulator and motor models
 import accumulator
-import powertrain_model
-motor = powertrain_model.motor()
+import powertrain
 
+motor = powertrain.motor()
 
 # v_max is the electronically imposed maximum velocity; set to 999 by default
 def simulate_mainloop(veh, tr):
@@ -28,16 +30,15 @@ def simulate_mainloop(veh, tr):
         v_max[i], tps_v_max[i], bps_v_max[i] = lap_utils.vehicle_model_lat(veh, tr, i)
 
     # Finding apexes
-    apex, _ = find_peaks(-v_max) 
+    apex, _ = find_peaks(-v_max)
     
     v_apex = v_max[apex]  # Flipping to get positive values
-    
 
     # Setting up standing start for open track configuration
     # TODO currently unused; we just have closed tracks atm
     if tr.info.config == 'Open':
         if apex[0] != 0:  # If our first velocity max is not already an apex
-            apex = np.insert(apex, 0, 1)  # Inject index 0 as apex
+            apex = np.insert(apex, 0, 0)  # Inject index 0 as apex
             v_apex = np.insert(v_apex, 0, 0)  # Inject standing start
         else:  # Index 1 is already an apex
             v_apex[0] = 0  # Set standing start at index 1
@@ -46,7 +47,7 @@ def simulate_mainloop(veh, tr):
     if len(apex)==0:
         apex = np.argmin(v_max)
         v_apex = v_max[apex]
-    
+
     # Reordering apexes for solver time optimization
     old_apexes = v_apex #for plotting later
     apex_table = np.column_stack((v_apex, apex))
@@ -54,6 +55,8 @@ def simulate_mainloop(veh, tr):
     
     v_apex = apex_table[:, 0]
     apex = apex_table[:, 1]
+
+    # print(apex, v_apex)
     
     apex = apex.astype(int)
 
@@ -102,7 +105,7 @@ def simulate_mainloop(veh, tr):
                 flag[j, k] = True
 
                 # Getting next point index (identify which j node will we solve for next)
-                _, j_next = lap_utils.next_point(j, tr.n-1, mode)
+                _, j_next = lap_utils.next_point(j, tr.n-1, mode, tr.info.config)
     
 
                 if not (tr.info.config == 'Open' and mode == 1 and i == 0):  # If we're not in standing start
@@ -110,7 +113,7 @@ def simulate_mainloop(veh, tr):
                     v[j_next, i, k] = v[j, i, k]
 
                     # Moving to the next point index
-                    j_next, j = lap_utils.next_point(j, tr.n-1, mode)
+                    j_next, j = lap_utils.next_point(j, tr.n-1, mode, tr.info.config)
     
                 # Solve for the velocities at the rest of the j apexes 
                 while True:
@@ -119,7 +122,7 @@ def simulate_mainloop(veh, tr):
 
                     # Checking for limit
                     if overshoot:
-                        #print("Overshot at ", j_next)
+                        # print(f"Overshot at {j_next} in mode {mode}")
                         break
 
                     # Checking if the point is already solved in the other apex iteration
@@ -132,8 +135,7 @@ def simulate_mainloop(veh, tr):
                     
                     # Updating flag and Moving to the next point index
                     flag[j, k] = True 
-                    j_next, j = lap_utils.next_point(j, tr.n-1, mode)
-                    
+                    j_next, j = lap_utils.next_point(j, tr.n-1, mode, tr.info.config)
 
                     # Checking if the lap is completed
                     if tr.info.config == 'Closed':
@@ -141,10 +143,11 @@ def simulate_mainloop(veh, tr):
                             counter += 1
                             break
                     elif tr.info.config == 'Open':
-                        if j == tr.n:  # Made it to the end
+                        if j == tr.n - 1 and mode == 1:  # Made it to the end
                             flag[j, k] = True #flag_update(flag, j, k, prg_size, logid, prg_pos)
                             break
-                        if j == 1:  # Made it to the start
+                        if j == 1 and mode == -1:  # Made it to the start
+                            flag[j, k] = True
                             break
 
 
@@ -154,26 +157,18 @@ def simulate_mainloop(veh, tr):
     AY = np.zeros(tr.n)
     TPS = np.zeros(tr.n)
     BPS = np.zeros(tr.n)
-    
+
     # solution selection
     for i in range(tr.n):
-        IDX = v.shape[1]
-        min_values = np.min(v[i, :, :], axis=1)
-        idx = np.argmin(min_values)
-        V[i] = min_values[idx]
+        idx = np.unravel_index(np.argmin(v[i, :, :]), v[i, :, :].shape)
 
-        if idx < IDX:  # Solved in acceleration
-            AX[i] = ax[i, idx, 0]
-            AY[i] = ay[i, idx, 0]
-            TPS[i] = tps[i, idx, 0]
-            BPS[i] = bps[i, idx, 0]
-        else:  # Solved in deceleration
-            AX[i] = ax[i, idx-IDX, 1]
-            AY[i] = ay[i, idx-IDX, 1]
-            TPS[i] = tps[i, idx-IDX, 1]
-            BPS[i] = bps[i, idx-IDX, 1]
+        V[i] = v[i, idx[0], idx[1]]
+        AX[i] = ax[i, idx[0], idx[1]]
+        AY[i] = ay[i, idx[0], idx[1]]
+        TPS[i] = tps[i, idx[0], idx[1]]
+        BPS[i] = bps[i, idx[0], idx[1]]
 
-    return V, AX, AY, TPS, BPS
+    return V, AX, AY, TPS, BPS, v_max
 
 # The old simulate is now simulate_mainloop; this method holds the additional clutter and modifications; 9/22
 def simulate(pack):
@@ -182,12 +177,11 @@ def simulate(pack):
     import vehicle as veh
 
     # Run our laputils functions to get first-pass solutions to the track
-    V, AX, AY, TPS, BPS = simulate_mainloop(veh, tr)
-
-    
-    # laptime calculation    
-    dt = np.divide(tr.dx, V)
-    time = np.cumsum(dt)
+    V, AX, AY, TPS, BPS, v_max = simulate_mainloop(veh, tr)
+    # laptime calculation
+    stretch_velocities = (V[:-1] + V[1:]) / 2
+    dt = np.divide(tr.dx[:-1], stretch_velocities)
+    time = np.insert(np.cumsum(dt), 0, 0)
     laptime = time[-1]
     
     # TODO this seems dubious
@@ -195,12 +189,10 @@ def simulate(pack):
     if (V[-1] == np.inf):
         V[-1] = V[-2]
 
-
     # TODO: 7/29/24; problem with 0 TPS, infinite V on endurance track showed up -- even in old versions, on new computer; this is a hotfix
     finite_velocities = V[np.isfinite(V)]
     minV = np.min(finite_velocities)
     V[np.isinf(V)] = minV
-    
 
     '''Determination of forces for energy calculations'''
 
@@ -209,13 +201,11 @@ def simulate(pack):
     wheel_torque = TPS * torque_func(V)
     motor_torque = wheel_torque / (veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final*veh.n_primary*veh.n_gearbox*veh.n_final)
 
-    #Power regen
-    brake_force = BPS/veh.beta                          # F_brake = BPS/veh.beta
+    brake_force = BPS / veh.beta                          # F_brake = BPS/veh.beta
     overall_regen_efficiency = 0.9                      # assumes xx% of energy from braking is regenerated by the motor
     regen_power_limit = 5                               # maximum rate of regen in kW
     regen_power_limit = regen_power_limit * 1000        # in Watts
-    
-    
+
     #TODO: model this better with more EECS data later
 
     peaks, __ = find_peaks(V)
@@ -237,24 +227,21 @@ def simulate(pack):
 
             brake_energies.append(energy)
 
-    
     regenerated_energy = np.sum(brake_energies)*overall_regen_efficiency #in Joules
 
     wheel_speed = V/veh.tyre_radius # wheel speed in radians/second
     motor_speed = wheel_speed*veh.ratio_primary*veh.ratio_gearbox*veh.ratio_final   # convert to motor speed
     motor_power = motor_torque * motor_speed #in W
 
-
     # Replace motor_power and wheel_torque curves with zeros where values are negative
     motor_power = np.where(motor_power < 0, 0, motor_power)
     wheel_torque = np.where(wheel_torque < 0, 0, wheel_torque)
 
     # Work from the motor is force from the motor * dx integrated over the track
-    motor_work = np.trapz(wheel_torque / veh.tyre_radius, x = tr.x)
-
+    motor_work = np.trapezoid(wheel_torque / veh.tyre_radius, x = tr.x)
 
     # Power of the motor numerically integrated over time
-    motor_energy = np.sum(np.multiply(motor_power, dt))
+    motor_energy = np.sum(np.multiply(motor_power[:-1], dt))
 
     energy_cost_total = motor_work/(3.6*10**6)                   # in kWh
     energy_gained_total = regenerated_energy/(3.6*10**6)         # in kWh
@@ -269,14 +256,11 @@ def simulate(pack):
 
     #scaled_motor_power = skidpad_scale_factor * motor_power
 
-
     energy_drain = energy_cost_total-energy_gained_total
 
     # Extremely rough hotfix for regen; decrease all motor power values
-    motor_power *= energy_drain/energy_cost_total
+    # motor_power *= energy_drain/energy_cost_total
     
-
-
     '''Modify our results to conform to electrical restrictions'''
 
     # Quasi-transient accumulator calculations
@@ -288,7 +272,6 @@ def simulate(pack):
     mot_powers = []
     current_draws = []
 
-    
     for i in range(len(motor_power)-1):
         power = motor_power[i]
 
@@ -326,10 +309,9 @@ def simulate(pack):
             motor_power[i] = new_power
 
         # Recalculate energy consumption based on our adjusted motor powers
-        motor_energy = np.sum(np.multiply(motor_power, dt))
+        motor_energy = np.sum(np.multiply(motor_power[:-1], dt))
         energy_cost_total = motor_energy/(3.6*10**6)                   # in kWh
         energy_drain = energy_cost_total
-
 
         # Get cell data for transient output
         pack_data = pack.get_pack_data()
@@ -348,31 +330,22 @@ def simulate(pack):
         
         V[i] = min(V[i], basespeed)
 
-    
-    
-    # re-calculate laptime with base speed limitation    
-    dt = np.divide(tr.dx, V)
-    time = np.cumsum(dt)
+    # re-calculate laptime with base speed limitation
+    stretch_velocities = (V[:-1] + V[1:]) / 2
+    dt = np.divide(tr.dx[:-1], stretch_velocities)
+    time = np.insert(np.cumsum(dt), 0, 0)
     laptime = time[-1]
-
 
     '''
     To optimize this properly, we should drain the accumulator after each point, then optimize accordingly
     Right now, we just look back at the lap, drain the accumulator, and adjust the speed/laptime "transiently" after we solve everything
     '''
-    
-            
-
-
 
     # Output all the data in a readable csv
 
     header = ['Time (s)', 'Velocity (m/s)', 'Torque Commanded (Nm)', 'Brake Commanded (N)', 
-              'Pack Voltage (V)', 'Discharge (Wh)', 'Base Speed (m/s)', 'Motor Power (W)', 'Current Draw (A)']
-    transient_output = pd.DataFrame(data=zip(time, V, motor_torque, brake_force, pack_voltages, pack_discharges, base_speeds, mot_powers, current_draws), columns=header)
-    
-
-
+              'Pack Voltage (V)', 'Discharge (Wh)', 'Motor Power (W)', 'Current Draw (A)', "Track Radius (m)", "Braking Power (W)", "Base Speed (m/s)"]
+    transient_output = pd.DataFrame(data=zip(time, V, motor_torque, brake_force, pack_voltages, pack_discharges, mot_powers, current_draws, tr.r, brake_force * V, base_speeds), columns=header)
 
     # Returns laptime in seconds, energy_drain in kWh
     return laptime, energy_drain, transient_output
@@ -384,6 +357,8 @@ def simulate_laps(pack, numLaps):
     laptimes = [laptime0]
     energy_drains = [energistics0]              #total energy drained from the accumulator (estimate)
     pack_failure = [pack.is_depleted()]         #check if the pack is depleted
+
+    print(f"Lap 1 simulated.")
     
     for lap in range(numLaps-1):
         laptime, energy_drain, output_df_prime = simulate(pack)
@@ -398,9 +373,8 @@ def simulate_laps(pack, numLaps):
         if quick_breaker:
             print("Pack failure on lap {}".format(lap+2))
             break
-
-        
-    
+        else:
+            print(f"Lap {lap + 2} simulated. [{sum(laptimes[:-1])} s, {sum(laptimes)} s)")
 
     # compile the basic outputs for optimization
     # THE DISCREPANCY WE SAW BETWEEN ACCUMULATOR DRAINAGE AND OPENLAP DRAINAGE IS BC OF REGEN
@@ -408,10 +382,7 @@ def simulate_laps(pack, numLaps):
     total_energy_drain = np.sum(energy_drains)
     pack_failed = pack_failure[-1]
 
-
     return total_time, total_energy_drain, pack_failed, output_df
-
-
 
 def simulate_pack(pack_data):
     pack = accumulator.Pack()
@@ -421,9 +392,19 @@ def simulate_pack(pack_data):
     file_name = f"openloop_out.csv"
     transient_output.to_csv(file_name, sep=',', encoding='utf-8', index=False)
 
+pack = accumulator.Pack(accumulator.Molicel_Cell_21700)
+pack.pack(14, 3, 10)
 
+# total_time, total_energy_drain, output_df = simulate(pack)
 
+# print(total_time, total_energy_drain)
+# output_df.to_csv("sims_logs/single_lap.csv")
 
+total_time, total_energy_drain, pack_failed, output_df = simulate_laps(pack, 22)
+
+print(total_time, total_energy_drain)
+
+output_df.to_csv("sims_logs/out_loop.csv")
 
 # RIT Actual
 # 4.903 kWh
