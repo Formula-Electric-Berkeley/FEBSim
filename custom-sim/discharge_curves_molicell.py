@@ -16,13 +16,10 @@ def fit_poly(df):
     # Fit a polynomial curve of degree 'n' to the data
     # Change the degree if needed
     n = 7
-    coefficients = np.polyfit(df['X'], df['Y'], n)
-    p = np.poly1d(coefficients)
+    p = np.polynomial.Polynomial.fit(df['X'], df['Y'], n)
 
     # Print the equation
-    equation = 'y = '
-    equation += ' + '.join([f'{coeff:.2e}*x^{i}' for i, coeff in enumerate(coefficients[::-1])])
-    #print(equation)
+    # print(p)
 
     # Return the fitting polynomial function
     return p
@@ -30,20 +27,19 @@ def fit_poly(df):
 # Load the data
 base_name = 'battery_info\\Molicell\\'
 
-
 # Replace the string with the correct path if the CSV files are not in the same directory
 A84 = pd.read_csv(base_name+'0.84A.csv', header=None)
+A42 = pd.read_csv(base_name+'4.2A.csv', header=None)
 A10 = pd.read_csv(base_name+'10A.csv', header=None)
 A20 = pd.read_csv(base_name+'20A.csv', header=None)
 A30 = pd.read_csv(base_name+'30A.csv', header=None)
-A42 = pd.read_csv(base_name+'4.2A.csv', header=None)
 
 # Add headers
 A84.columns = ['X', 'Y']
+A42.columns = ['X', 'Y']
 A10.columns = ['X', 'Y']
 A20.columns = ['X', 'Y']
 A30.columns = ['X', 'Y']
-A42.columns = ['X', 'Y']
 
 # Parameters for outlier removal
 window_size = 30  # Adjust if necessary
@@ -61,8 +57,6 @@ plt.figure(figsize=(10, 8))
 datasets = [A84, A42, A10, A20, A30]
 colors = ['red', 'green', 'blue', 'black', 'magenta']
 labels = ['0.84A', '4.2A', '10A', '20A', '30A']
-
-
 
 def plot():
     for df, color, label in zip(datasets, colors, labels):
@@ -93,12 +87,10 @@ def plot():
 
 def return_polynomials():
     polynomials = []
-    for df in datasets:
 
+    for df in datasets:
         # Fit polynomial (Assuming fit_poly is previously defined and working correctly)
         p = fit_poly(df)
         polynomials.append(p)
 
     return polynomials
-    
-#plot()
