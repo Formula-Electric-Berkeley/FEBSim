@@ -168,9 +168,9 @@ plt.figure(figsize=(6,6))
 cont = plt.contourf(X, Y, temp_plot, levels=50)
 
 plt.colorbar(cont, label="Value")
-plt.gca().set_aspect('equal')
+plt.gca().set_aspect('equal') # make plot fit window
 plt.xlabel("x")
 plt.ylabel("y")
-plt.title("Polar Contour Plot")
+plt.title("Tire Temperature")
 
 plt.show()
