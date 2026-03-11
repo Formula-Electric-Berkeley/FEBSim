@@ -1,0 +1,176 @@
+#Importing Modules
+
+import numpy as np 
+import matplotlib.pyplot as plt
+
+#values to pull from mass point sim
+v=30 #m/s
+
+#Defining Physical Constants
+T0=293.0 #ambient temp
+G=9.81 #m/s^2
+M=300 #kg mass of car assuming 
+C=.01 #Coefficient of Rolling Resitance Std value
+r_tire=.02 #m tire radius
+w=.01 #m tire estimated width
+rho_tire=1270 #kg/m^3 avg value of tire rubber density
+c_tire=1500 #J/kg K heat capcity of tire rubber 
+alpha_tire=.1 *10**(-6) #thermal diffusivity of tire -> thermal diffusivity alpha= k/rho*c
+alpha_rim= 6 *10**(-5) #thermal diffusivity of rim 
+
+#Difrentials/ Mesh Sizing
+dr=.001 #m
+dt=1 #s
+dtheta=np.deg2rad(1.0)
+
+#Meshing 
+
+r=np.arange(0,r_tire,dr)
+
+theta=np.arange(0,2*np.pi,dtheta)
+
+#create mesh grid-> pairs of r and theta temp and x and y map to
+R,THETA=np.meshgrid(r,theta)
+
+MESH=np.zeros(R.shape) #generating as mesh wher i index is R and j inex is THETA
+
+#Material property assignment to mesh
+
+alpha=np.zeros(np.shape(MESH))
+
+temp=np.full(np.shape(MESH),T0)
+
+rho=np.zeros(np.shape(MESH))
+
+c=np.zeros(np.shape(MESH))
+
+q=np.zeros(np.shape(MESH))
+
+for i in range(len(r)):
+     if r[i]<=.01:
+        alpha[:,i]=alpha_rim
+        c[:,i]=c_tire
+        rho[:,i]=rho_tire
+     else:
+         alpha[:,i]=alpha_tire
+         c[:,i]=c_tire
+         rho[:,i]=rho_tire
+
+
+#Defining Governing Equations
+
+F_RR= lambda C,M,G: C*M*G #Restive Rolling force -> force that from the polymers resting deformation from energy loss of not fully decompressing polymer chains
+
+#Heat calculations
+r_heat = r[-2]
+qv = (F_RR(C,M,G)*v) / (3*w*r_heat*dtheta*dr) #calculation for volumetric heat gen for rolling resitance or the polymers above tire-ground interface unable to release energy -> estimate 3 points share this heat gen
+
+#2D fintie difference from cylindrical heat equaiton-> returns next steps temperature
+def heat_step(T, alpha, dt, r, dr, dtheta, TiP, TiM, TjP, TjM,rho,cp,qv):
+
+    d2T_dr2 = (TiP - 2*T + TiM) / dr**2
+    dT_dr   = (TiP - TiM) / (2*dr)
+    d2T_dth2 = (TjP - 2*T + TjM) / dtheta**2
+
+    return T + dt * (alpha*(d2T_dr2 + (1/r)*dT_dr + (1/r**2)*d2T_dth2) + qv/(rho*cp))
+
+#r=0/center node special case heat equation
+heat_step0= lambda T,alpha,dt,dr,TiP: T+4*alpha*dt*((TiP-T)/(dr**2))
+
+# Heat Transfer sim
+
+#setting heat gen spots / for rolling put 1 dr behind max radius and start at theta 270 degrees -> rotate clockwise
+q_gen=np.zeros(np.shape(MESH))
+
+rad1=268
+rad2=rad1+3
+
+q_gen[rad1:rad2,len(r)-2]=qv
+
+Time_Limit=10 #sec
+Time=0 # sec
+
+while Time < Time_Limit:
+    #for rotating heat gen compression
+    omega=v/r[-2]
+    rad= omega*dt
+    index_to_rotate=int(np.round(rad/dtheta))
+    index_to_rotate=index_to_rotate%len(theta)
+    
+    #setting new heat gen spot
+    q_gen[:,:]=0
+
+    rad1=index_to_rotate
+    rad2=rad1+3
+
+    if rad2 <= len(theta):
+        q_gen[rad1:rad2,len(r)-2]=qv
+    else:
+        q_gen[rad1:,len(r)-2]=qv
+        q_gen[:rad2-len(theta),len(r)-2]=qv
+
+    temp_old = temp.copy() #holder for last cycle temp
+    temp_new = temp_old.copy() #creating the holder for calculated temps
+
+    for j in range(len(theta)):
+        for i in range(len(r)):
+
+            jp = (j + 1) % len(theta) #so that way it wraps to zero when hit 360
+            jm = (j - 1) % len(theta) #so when at j=0 wraps to 359--> for a%b learned python always returns a number between 0 and b-1-> asks what number could i add to a multiple to 360 to get -1 
+
+            if i == 0:
+                # center node
+                temp_new[j,i] = heat_step0(
+                    temp_old[j,i],
+                    alpha[j,i],
+                    dt,
+                    dr,
+                    temp_old[j,i+1]
+                )
+
+            elif i == len(r)-1:
+                # outer boundary (placeholder)--> dichlret boundry conditions
+                temp_new[j,i] = temp_old[j,i]
+
+            else:
+                # interior nodes
+                temp_new[j,i] = heat_step(
+                    temp_old[j,i],
+                    alpha[j,i],
+                    dt,
+                    r[i],
+                    dr,
+                    dtheta,
+                    temp_old[j,i+1],
+                    temp_old[j,i-1],
+                    temp_old[jp,i],
+                    temp_old[jm,i],
+                    rho[j,i],
+                    c[j,i],
+                    q_gen[j,i]
+                )
+
+    temp = temp_new
+    Time += dt
+
+
+#make cartesian
+theta_plot = np.append(theta, 2*np.pi) #didnt include 2pi as unique point since = 0 so adding back to complete circle of tire 
+temp_plot = np.vstack([temp, temp[0:1, :]])
+
+R_plot, THETA_plot = np.meshgrid(r, theta_plot)
+
+X = R_plot*np.cos(THETA_plot)
+Y = R_plot*np.sin(THETA_plot)
+
+# contour plot
+plt.figure(figsize=(6,6))
+cont = plt.contourf(X, Y, temp_plot, levels=50)
+
+plt.colorbar(cont, label="Value")
+plt.gca().set_aspect('equal')
+plt.xlabel("x")
+plt.ylabel("y")
+plt.title("Polar Contour Plot")
+
+plt.show()
