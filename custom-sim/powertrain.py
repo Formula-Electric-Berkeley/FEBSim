@@ -9,7 +9,7 @@ import os
 
 class motor():
     def __init__(self):
-        src_file_name = 'motor_curves/raw_curves.csv'
+        src_file_name = os.path.join('motor_curves', 'raw_curves.csv')
 
         # Read File
         info = pd.read_csv(src_file_name)
@@ -130,19 +130,14 @@ class motor():
     def get_motor_efficiency(self):
         colors = ['red', 'orange', 'green', 'blue', 'violet']  # Not used here
 
-        base_name = ""
-        
-        if os.name == "nt":
-            base_name = 'motor_curves\\'
-        else:
-            base_name = 'motor_curves/'
-            
+        # use os.path.join to build the path; no need for OS-specific separators
+        base_dir = os.path.join('motor_curves')
         labels = [86, 90, 94, 95, 96]  # Efficiency values
         datasets = []
 
         for label in labels:
             # Load CSV
-            dfi = pd.read_csv(f"{base_name}{label}.csv", header=None, names=['motor_speed', 'motor_torque'])
+            dfi = pd.read_csv(os.path.join(base_dir, f"{label}.csv"), header=None, names=['motor_speed', 'motor_torque'])
             
             # Add efficiency column
             dfi['efficiency'] = label
