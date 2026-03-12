@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -27,8 +28,9 @@ def fit_poly(df):
     # Return the fitting polynomial function
     return p
 
-# Load the data; replace the string with the correct path if the CSV files are not in the same directory
-base_name = 'battery_info\\Energus\\SonyVTC6_'
+# Load the data
+base_dir = os.path.join('battery_info', 'Energus')
+base_prefix = 'SonyVTC6_'
 
 
 # Parameters for outlier removal
@@ -47,7 +49,7 @@ datasets = []
 pull_point = pd.DataFrame({'X': [3.0], 'Y': [2.5]})
 
 for i, label in enumerate(labels):
-    Ai = pd.read_csv(base_name+'{}.csv'.format(label), header=None)
+    Ai = pd.read_csv(os.path.join(base_dir, f"{base_prefix}{label}.csv"), header=None)
 
     # Add headers; the x 1-SOC in amp hours, y is voltage of cell
     Ai.columns = ['X', 'Y']
