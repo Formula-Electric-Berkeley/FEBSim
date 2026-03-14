@@ -3,24 +3,27 @@
 import numpy as np 
 import matplotlib.pyplot as plt
 
-#values to pull from mass point sim
-v=30 #m/s
+#values to pull from mass point sim or real data 
+v_cornner=30 #m/s
+#checked out the tire data will def use for cornnering sim for temp after finish braking 
 
 #Defining Physical Constants
 T0=293.0 #ambient temp
 G=9.81 #m/s^2
 M=300 #kg mass of car assuming 
 C=.01 #Coefficient of Rolling Resitance Std value
-r_tire=.02 #m tire radius
-w=.01 #m tire estimated width
+r_tire=.3 #m tire radius
+w=.2 #m tire estimated width
 rho_tire=1270 #kg/m^3 avg value of tire rubber density
+rho_rim=2640 #kg^m^3 aluminum assumption
 c_tire=1500 #J/kg K heat capcity of tire rubber 
+c_rim=938 #J/kg K heat capcity
 alpha_tire=.1 *10**(-6) #thermal diffusivity of tire -> thermal diffusivity alpha= k/rho*c
 alpha_rim= 6 *10**(-5) #thermal diffusivity of rim 
 
 #Difrentials/ Mesh Sizing
 dr=.001 #m
-dt=1 #s
+dt=.01 #s
 dtheta=np.deg2rad(1.0)
 
 #Meshing 
@@ -49,13 +52,23 @@ q=np.zeros(np.shape(MESH))
 for i in range(len(r)):
      if r[i]<=.01:
         alpha[:,i]=alpha_rim
-        c[:,i]=c_tire
-        rho[:,i]=rho_tire
+        c[:,i]=c_rim
+        rho[:,i]=rho_rim
      else:
          alpha[:,i]=alpha_tire
          c[:,i]=c_tire
          rho[:,i]=rho_tire
 
+#time for sim
+Time_Limit=10 #sec
+Time=0 # sec
+
+#synthetic data for sim 
+a_accel=9.81 #generic acceleration m/s^2
+a_decel=-9.81
+a=a_accel
+
+v=np.zeros(int(Time_Limit/dt))
 
 #Defining Governing Equations
 
@@ -63,7 +76,7 @@ F_RR= lambda C,M,G: C*M*G #Restive Rolling force -> force that from the polymers
 
 #Heat calculations
 r_heat = r[-2]
-qv = (F_RR(C,M,G)*v) / (3*w*r_heat*dtheta*dr) #calculation for volumetric heat gen for rolling resitance or the polymers above tire-ground interface unable to release energy -> estimate 3 points share this heat gen
+qv = lambda v:(F_RR(C,M,G)*v) / (20*w*r_heat*dtheta*dr) #calculation for volumetric heat gen for rolling resitance or the polymers above tire-ground interface unable to release energy -> estimate 3 points share this heat gen
 
 #2D fintie difference from cylindrical heat equaiton-> returns next steps temperature
 def heat_step(T, alpha, dt, r, dr, dtheta, TiP, TiM, TjP, TjM,rho,cp,qv):
@@ -77,22 +90,29 @@ def heat_step(T, alpha, dt, r, dr, dtheta, TiP, TiM, TjP, TjM,rho,cp,qv):
 #r=0/center node special case heat equation
 heat_step0= lambda T,alpha,dt,dr,TiP: T+4*alpha*dt*((TiP-T)/(dr**2))
 
-# Heat Transfer sim
+### Heat Transfer sim ###
 
 #setting heat gen spots / for rolling put 1 dr behind max radius and start at theta 270 degrees -> rotate clockwise
 q_gen=np.zeros(np.shape(MESH))
 
 rad1=268
-rad2=rad1+3
+rad2=rad1+20
 
-q_gen[rad1:rad2,len(r)-2]=qv
+brake_idx = int(0.12 / dr) #brake rotor
 
-Time_Limit=10 #sec
-Time=0 # sec
+print(int(Time_Limit/dt))
 
-while Time < Time_Limit:
+for k in range(0,int(Time_Limit/dt)):
+    #velocity of synthetic acceleration
+    if (k+1)<len(v):
+        if k>=int(Time_Limit/dt)*.5:
+            a=a_decel
+        else:
+            a=a_accel
+        v[k+1]=v[k]+a*dt
+
     #for rotating heat gen compression
-    omega=v/r[-2]
+    omega=v[k]/r[-2]
     rad= omega*dt
     index_to_rotate=int(np.round(rad/dtheta))
     index_to_rotate=index_to_rotate%len(theta)
@@ -100,14 +120,22 @@ while Time < Time_Limit:
     #setting new heat gen spot
     q_gen[:,:]=0
 
+    if a>0:
+        if rad2 <= len(theta): #if within the 0-360 degrees rad2 aka no wrap around normal setting 
+            q_gen[rad1:rad2,len(r)-2]=qv(v[k])
+            print(qv(v[k]))
+        else: #for the case where rad1 is like 358 degrees so start there fill in to 360 and do the wrap around starting at 0 to wherever rad 2 ends
+            q_gen[rad1:,len(r)-2]=qv(v[k])
+            q_gen[:rad2-len(theta),len(r)-2]=qv(v[k])
+            print(qv(v[k]))
+    else: #put brake pad between 45 degrees 2 dr away from center and use delta KE for heat energy 90% going to brake pad assuming even energy distribution to wheels 
+          dKE = max(0, 0.5 * M * (v[k]**2 - v[k+1]**2)) if (k+1) < len(v) else 0 #heat gen shouldnt be negative just preventing indexing error 
+          q_gen[0:50, brake_idx:brake_idx+19]      = (0.9 * dKE / dt) / (4*50*20 * w * r[20]  * dtheta * dr)
+          q_gen[250:270, -2] = (0.1 * dKE / dt) / (20*4 * w * r[-2] * dtheta * dr)
+          print( (0.9 * dKE / dt) / (12 * w * r[3]  * dtheta * dr),(0.1 * dKE / dt) / (12 * w * r[-2] * dtheta * dr))
+
     rad1=index_to_rotate
     rad2=rad1+3
-
-    if rad2 <= len(theta):
-        q_gen[rad1:rad2,len(r)-2]=qv
-    else:
-        q_gen[rad1:,len(r)-2]=qv
-        q_gen[:rad2-len(theta),len(r)-2]=qv
 
     temp_old = temp.copy() #holder for last cycle temp
     temp_new = temp_old.copy() #creating the holder for calculated temps
@@ -151,8 +179,6 @@ while Time < Time_Limit:
                 )
 
     temp = temp_new
-    Time += dt
-
 
 #make cartesian
 theta_plot = np.append(theta, 2*np.pi) #didnt include 2pi as unique point since = 0 so adding back to complete circle of tire 
@@ -165,7 +191,9 @@ Y = R_plot*np.sin(THETA_plot)
 
 # contour plot
 plt.figure(figsize=(6,6))
-cont = plt.contourf(X, Y, temp_plot, levels=50)
+levels = np.linspace(temp_plot.min(), temp_plot.max(), 50)
+cont = plt.contourf(X, Y, temp_plot, levels=levels)
+
 
 plt.colorbar(cont, label="Value")
 plt.gca().set_aspect('equal') # make plot fit window
@@ -174,3 +202,5 @@ plt.ylabel("y")
 plt.title("Tire Temperature")
 
 plt.show()
+
+print(np.isnan(temp).any(), np.isinf(temp).any()) #sanity check 
