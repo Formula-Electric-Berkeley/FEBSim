@@ -1,6 +1,7 @@
 '''
 Run a regular lap sim. Run simulate_endurance to run your simulation.
 '''
+import os
 import numpy as np
 import lap_utils
 from scipy.signal import find_peaks
@@ -10,6 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import sys
+from datetime import datetime
 
 # import our accumulator and motor models
 import accumulator
@@ -384,12 +386,23 @@ def simulate_laps(pack, numLaps):
 
     return total_time, total_energy_drain, pack_failed, output_df
 
+def timestamp(prefix='out_loop'):
+    """Return a filename under `openLoopOutputs` with current time
+
+    Format: out_loop_(MMDDYY_HHMMSS).csv
+    """
+    base_dir = 'openLoopOutputs'
+    os.makedirs(base_dir, exist_ok=True)
+    ts = datetime.now().strftime('%m%d%y_%H%M%S')
+    return os.path.join(base_dir, f"{prefix}_({ts}).csv")
+
+
 def simulate_pack(pack_data):
     pack = accumulator.Pack()
     pack.pack(pack_data[0], pack_data[1], pack_data[2]) 
     laptime, energy_drain, transient_output = simulate(pack)
 
-    file_name = f"openloop_out.csv"
+    file_name = timestamp()
     transient_output.to_csv(file_name, sep=',', encoding='utf-8', index=False)
 
 pack = accumulator.Pack(accumulator.Molicel_Cell_21700)
@@ -404,7 +417,7 @@ total_time, total_energy_drain, pack_failed, output_df = simulate_laps(pack, 22)
 
 print(total_time, total_energy_drain)
 
-output_df.to_csv("sims_logs/out_loop.csv")
+output_df.to_csv(timestamp(), sep=',', encoding='utf-8', index=False)
 
 # RIT Actual
 # 4.903 kWh
