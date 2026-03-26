@@ -5,8 +5,7 @@ Reads all run CSVs from SN5_R9_Lateral and/or SN5_R9_Longitudinal,
 bins rows by FZ (normal load), and writes one CSV per bin into an
 output folder.
 
-FZ is negative (compression convention). Bins are specified as (lo, hi)
-tuples in that same negative convention, e.g. (-1000, -750).
+This was used to give data to Dynamics for their own analysis.
 
 Outputs:
     SN5_R9_Lateral/fz_bins/fz_{lo}_{hi}N.csv
