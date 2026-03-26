@@ -299,17 +299,21 @@ def camber_moments_fig(data_binned_IA):
     return fig
 
 def camber_binned_fy(data_binned_IA):
-    fig = make_subplots(rows=1, cols=3, subplot_titles=[f"IA={ia}" for ia in [0, 2, 4]])
+    fig = make_subplots(rows=1, cols=2, subplot_titles=[f"IA range {ia}" for ia in [[0.1, 1.9], [2.1, 3.9]]])
 
-    for i in range(3):
+    for i in range(len(data_binned_IA)):
         data_bin_IA = data_binned_IA[i]
 
-        Fz_bins = [[-1200, -1000], [-1000, -800], [-800, -500], [-500, -350], [-350, -100]]
+        # Fz_bins = [[-1200, -1000], [-1000, -800], [-800, -500], [-500, -350], [-350, -100]]
+        Fz_bins = [[-10000, 10000]]
         data_bin_AI_binned_FZ = bin_by_param(data_bin_IA, Fz_bins, "FZ N")
 
-        for j in range(5):
+        print(data_bin_AI_binned_FZ)
+
+        for j in range(1):
             Fz_value = int((Fz_bins[j][0] + Fz_bins[j][1]) / 2)
-            Fz_sample = data_bin_AI_binned_FZ[j].sample(n = 1000)
+            # Fz_sample = data_bin_AI_binned_FZ[j].sample(n = 1000)
+            Fz_sample = data_bin_AI_binned_FZ[j]
 
             fig.add_trace(
                 go.Scatter(
@@ -335,6 +339,7 @@ def camber_binned_fy(data_binned_IA):
 # Main 
 if __name__ == "__main__":
     all_data = get_run_data(SELECTED_RUNS)
+    timestamp = datetime.now().strftime("%m%d_%H%M%S")
 
     # Column names from your probe
     IA_COL = "IA deg"   # camber / inclination angle (deg)
@@ -345,15 +350,23 @@ if __name__ == "__main__":
 
     # Build IA bins and slice data
     IA_bins = [[-np.inf, 0.1], [1.9, 2.1], [3.9, 4.1]]
+    IA_bins = [[0.1, 1.9], [2.1, 3.9]]
     data_binned_IA = bin_by_ia(all_data, IA_bins, IA_COL, SA_COL, FY_COL, FZ_COL, MZ_COL)
 
-    timestamp = datetime.now().strftime("%m%d_%H%M%S")
+    # for i in range(len(IA_bins)):
+    #     fig = go.Figure()
+
+    #     fig.add_trace(go.Histogram(
+    #         x=data_binned_IA[i]["FZ N"]
+    #     ))
+
+    #     fig.write_html(f"fy_out/figures/fz_histogram_at_ia_{IA_bins[i]}_({timestamp}).html")
 
     fig = camber_binned_fy(data_binned_IA)
     fig.write_html(f"fy_out/figures/fy_binned_IA_({timestamp}).html")
 
-    ia_fig = IA_histogram(all_data)
-    ia_fig.write_html(f"fy_out/figures/ia_histogram_({timestamp}).html")
+    # ia_fig = IA_histogram(all_data)
+    # ia_fig.write_html(f"fy_out/figures/ia_histogram_({timestamp}).html")
 
     # fig = camber_moments_fig()
     # fig.write_html(f"fy_out/figures/moment_with_camber_({timestamp}).html")

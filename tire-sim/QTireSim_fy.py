@@ -257,7 +257,7 @@ for i in range(FZ_BIN_COUNT):
 
 print(params_binned)
 
-new_fig = coefficient_figs(params_binned, Fz_bins)
-new_fig.write_html("QVis.html")
+new_fig = bin_figs(all_data_binned, params_binned, Fz_bins)
+new_fig.write_html("fy_out/bin_figs.html")
 
 sys.exit(0)

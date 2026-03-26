@@ -1,5 +1,6 @@
 from typing import List
 import sys
+from datetime import datetime
 
 import pandas as pd
 import numpy as np
@@ -47,8 +48,8 @@ GRAPH_ROWS = 2
 PACEJKA_PARAMS_NAMES = ["B", "C", "D", "E", "F"]
 PACEJKA_PARAMS_GUESS = [-18, -0.01, 100000, -2, 0.00076]  # Update as needed
 
-PACEJKA_PARAM_FIT_FNS = [exp_fit, quad_fit, quad_fit, lin_fit, lin_fit]
-PACEJKA_PARAM_FIT_GUESS = [
+PACEJKA_PARAMS_FIT_FNS = [exp_fit, quad_fit, quad_fit, lin_fit, lin_fit]
+PACEJKA_PARAMS_FIT_GUESS = [
     [-18, -30, 0.01],
     [0, 0, 0],
     [0, 0, 0],
@@ -137,7 +138,7 @@ def single_fig_color_gradient(metric_data : pd.DataFrame) -> go.Figure:
             x=metric_data["SL none"],
             y=metric_data["FX N"],
             mode="markers", 
-            marker=dict(color=metric_data["FZ N"], colorscale="Viridis", showscale=True, colorbar=dict(title="Load Force (N)")),
+            #   ,
         )
     )
 
@@ -204,6 +205,82 @@ def coefficient_figs(params_binned : List[tuple[float, float, float, float, floa
 
     return fig
 
+def surface_fig(all_data : pd.DataFrame, params_binned : List[tuple[float, float, float, float ,float]], Fz_bins : List[tuple[float, float]]) -> go.Figure:
+    hyper_coefficients = []
+    
+    for i in range(5):
+        values_for_this_param = params_binned[:,i] # ith column
+        Fz_medians = [(ub + lb) / 2 for lb, ub in Fz_bins]
+
+        coefficients, _ = curve_fit(PACEJKA_PARAM_FIT_FNS[i], Fz_medians, values_for_this_param, maxfev=150000, p0=PACEJKA_PARAM_FIT_GUESS[i])
+        hyper_coefficients.append(coefficients)
+
+    # Define the Pacejka Magic Formula for lateral force (FY) with five coefficients
+    def mvar_pacejka(alpha, Fz):
+        B, C, D, E, F = [PACEJKA_PARAM_FIT_FNS[i](Fz, *hyper_coefficients[i]) for i in range(5)]
+
+        return D * np.sin(C * np.arctan(B * alpha - E * (B * alpha - np.arctan(B * alpha))) + F)
+
+    Fz_domain = np.linspace(all_data["FZ N"].min(), -225, 100)
+    SA_domain = np.linspace(all_data["SL none"].min(), all_data["SL none"].max(), 100)
+
+    Fy_surface = np.zeros(shape=(len(Fz_domain), len(SA_domain)))
+    for i in range(len(Fz_domain)):
+        for j in range(len(SA_domain)):
+            Fy_surface[j][i] = mvar_pacejka(SA_domain[j], Fz_domain[i])
+
+    fig = go.Figure(data=[go.Surface(
+        x=Fz_domain,
+        y=SA_domain,
+        z=Fy_surface
+    )])
+
+    CA_YELLOW = "#FDB515"
+    BK_BLUE = "#002676"
+
+    LABEL_COLOR = BK_BLUE
+    TICK_COLOR = CA_YELLOW
+    
+    SCENE_BACKGROUND = "white" #"Greenscreen", to photoshop out background
+    PLANE_COLOR = "#242424"
+
+    fig.update_layout(
+        scene=dict(
+            bgcolor=SCENE_BACKGROUND,
+            xaxis=dict(
+                gridcolor=TICK_COLOR,
+                title=dict(text='Load Force (N)', font=dict(color=LABEL_COLOR, size=30)),
+                tickfont=dict(color=LABEL_COLOR),
+                showbackground=True,
+                backgroundcolor=PLANE_COLOR
+            ),
+            yaxis=dict(
+                gridcolor=TICK_COLOR,
+                title=dict(text='Slip Ratio', font=dict(color=LABEL_COLOR, size=30)),
+                tickfont=dict(color=LABEL_COLOR),
+                showbackground=True,
+                backgroundcolor=PLANE_COLOR
+            ),
+            zaxis=dict(
+                gridcolor=TICK_COLOR,
+                title=dict(text='Longitudinal Force (N)', font=dict(color=LABEL_COLOR, size=30)),
+                tickfont=dict(color=LABEL_COLOR),
+                showbackground=True,
+                backgroundcolor=PLANE_COLOR
+            ),
+        ),
+        title=dict(
+            x=0.5,
+            xanchor='center',
+            text='Longitudinal Force vs Load Force and Slip Ratio',
+            font=dict(
+                size=36,
+            )
+        )
+    )
+    
+    return fig
+
 all_data = get_run_data(SELECTED_RUNS)
 
 special_data = all_data[all_data["SL none"].notnull()]
@@ -218,18 +295,37 @@ all_data_binned = Fz_bin_data(all_data, Fz_bins)
 
 params_binned = np.array(list(map(get_pacejka_params, all_data_binned)))
 
-bin_fig = bin_figs(all_data_binned, params_binned, Fz_bins)
-coeff_fig = coefficient_figs(params_binned, Fz_bins)
+timestamp = datetime.now().strftime("%m%d_%H%M%S")
 
-for i in range(FZ_BIN_COUNT):
-    print(f"Bin {i}")
-    print("Params:", params_binned[i])
+hyper_coefficients = []
 
-    r2_val = r2_score(all_data_binned[i]["FX N"], pacejka_model(all_data_binned[i]["SL none"], *params_binned[i]))
-    print("R2:", r2_val)
+for i in range(5):
+    values_for_this_param = params_binned[:,i] # ith column
+    Fz_medians = [(ub + lb) / 2 for lb, ub in Fz_bins]
+
+    coefficients, _ = curve_fit(PACEJKA_PARAMS_FIT_FNS[i], Fz_medians, values_for_this_param, maxfev=150000, p0=PACEJKA_PARAMS_FIT_GUESS[i])
+    hyper_coefficients.append(coefficients)
+    
+surf_fig = surface_fig(all_data, hyper_coefficients, Fz_bins, 0, -800)
+
+surf_fig.write_html(f"fy_out/figures/fy_sens_surf_({timestamp}).html")
+
+# bin_fig = bin_figs(all_data_binned, params_binned, Fz_bins)
+# coeff_fig = coefficient_figs(params_binned, Fz_bins)
+
+# for i in range(FZ_BIN_COUNT):
+#     print(f"Bin {i}")
+#     print("Params:", params_binned[i])
+
+#     r2_val = r2_score(all_data_binned[i]["FX N"], pacejka_model(all_data_binned[i]["SL none"], *params_binned[i]))
+#     print("R2:", r2_val)
 
 
-bin_fig.write_html("bins_plot.html")
-coeff_fig.write_html("coeff_plot.html")
+# # bin_fig.write_html("fx_out/bins_plot.html")
+# # coeff_fig.write_html("fx_out/coeff_plot.html")
 
-sys.exit(0)
+# surface = surface_fig(all_data, params_binned, Fz_bins)
+
+# surface.write_html("fx_out/surface_fig.html")
+
+# sys.exit(0)
