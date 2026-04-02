@@ -2,6 +2,7 @@
 
 import numpy as np 
 import matplotlib.pyplot as plt
+import sys
 
 #values to pull from mass point sim or real data 
 v_cornner=30 #m/s
@@ -21,10 +22,19 @@ c_rim=938 #J/kg K heat capcity
 alpha_tire=.1 *10**(-6) #thermal diffusivity of tire -> thermal diffusivity alpha= k/rho*c
 alpha_rim= 6 *10**(-5) #thermal diffusivity of rim 
 
+#clumped model heat anaylsis from brake pad to hub
+#units [=] W/mK
+R_pad= 3.0
+R_disc=.03
+R_hub=.06
+
+#for clumped modeling heat cond find fraction makes to wheel via assuming air, brake pad, and hub have intial temp do Qdot_hub/Qdot_tot Qdpt=DT/R
+frac=(1/R_hub)/((1/R_hub)+(1/R_disc)+(1/R_pad))
+
 #Difrentials/ Mesh Sizing
-dr=.001 #m
-dt=.01 #s
-dtheta=np.deg2rad(1.0)
+dr= 0.005 #m
+dt=.1 #s
+dtheta=np.deg2rad(20.0)
 
 #Meshing 
 
@@ -60,7 +70,7 @@ for i in range(len(r)):
          rho[:,i]=rho_tire
 
 #time for sim
-Time_Limit=10 #sec
+Time_Limit=100 #sec
 Time=0 # sec
 
 #synthetic data for sim 
@@ -98,9 +108,17 @@ q_gen=np.zeros(np.shape(MESH))
 rad1=268
 rad2=rad1+20
 
-brake_idx = int(0.12 / dr) #brake rotor
-
-print(int(Time_Limit/dt))
+#stability check before sim
+for l in range(1, len(r)):   # skip r=0
+    crit_rim  = alpha_rim*dt*(1/dr**2 + 1/(r[l]**2 * dtheta**2))
+    crit_tire = alpha_tire*dt*(1/dr**2 + 1/(r[l]**2 * dtheta**2))
+    if max(crit_rim, crit_tire) > 0.5:
+        print("Unstable mesh near r =", r[l])
+        ans=input('proceed (y/n)? ')
+        if ans =='n':
+            sys.exit(0)
+        else:
+            break
 
 for k in range(0,int(Time_Limit/dt)):
     #velocity of synthetic acceleration
@@ -122,17 +140,38 @@ for k in range(0,int(Time_Limit/dt)):
 
     if a>0:
         if rad2 <= len(theta): #if within the 0-360 degrees rad2 aka no wrap around normal setting 
-            q_gen[rad1:rad2,len(r)-2]=qv(v[k])
+            q_gen[rad1:rad2,-5:-1]=qv(v[k])
             print(qv(v[k]))
         else: #for the case where rad1 is like 358 degrees so start there fill in to 360 and do the wrap around starting at 0 to wherever rad 2 ends
-            q_gen[rad1:,len(r)-2]=qv(v[k])
-            q_gen[:rad2-len(theta),len(r)-2]=qv(v[k])
+            q_gen[rad1:,-5:-1]=qv(v[k])
+            q_gen[:rad2-len(theta),-5:-1]=qv(v[k])
             print(qv(v[k]))
     else: #put brake pad between 45 degrees 2 dr away from center and use delta KE for heat energy 90% going to brake pad assuming even energy distribution to wheels 
-          dKE = max(0, 0.5 * M * (v[k]**2 - v[k+1]**2)) if (k+1) < len(v) else 0 #heat gen shouldnt be negative just preventing indexing error 
-          q_gen[0:50, brake_idx:brake_idx+19]      = (0.9 * dKE / dt) / (4*50*20 * w * r[20]  * dtheta * dr)
-          q_gen[250:270, -2] = (0.1 * dKE / dt) / (20*4 * w * r[-2] * dtheta * dr)
-          print( (0.9 * dKE / dt) / (12 * w * r[3]  * dtheta * dr),(0.1 * dKE / dt) / (12 * w * r[-2] * dtheta * dr))
+            # total vehicle KE drop over this step
+             dKE_total = max(0.0, 0.5 * M * (v[k]**2 - v[k+1]**2)) if (k+1) < len(v) else 0.0
+
+            # braking power assigned to one wheel
+             Qdot_wheel = 0.25 * dKE_total / dt
+
+            # split braking power by mechanism
+             Qdot_hub_in = 0.9 * frac * Qdot_wheel     # conducted into inner rim/hub mesh region
+             Qdot_tread_slip = 0.1 * Qdot_wheel        # tread slip/friction heating
+
+            #  inner hub/rim deposit region
+             hub_i1, hub_i2 = 1, 3          # avoid i=0
+             hub_j1, hub_j2 = 0, len(theta) # all theta
+
+             V_hub = 0.0
+             for jh in range(hub_j1, hub_j2):
+                for ih in range(hub_i1, hub_i2):
+                    V_hub += r[ih] * dr * dtheta * w
+
+             q_hub = Qdot_hub_in / V_hub if V_hub > 0 else 0.0
+             q_gen[hub_j1:hub_j2, hub_i1:hub_i2] = q_hub
+
+            #  tread slip deposit region
+            # put it near outer radius and near contact patch
+             q_gen[270:290,-2:-5]=Qdot_tread_slip/(r_heat*dtheta*w*60*dr)
 
     rad1=index_to_rotate
     rad2=rad1+3
@@ -142,7 +181,7 @@ for k in range(0,int(Time_Limit/dt)):
 
     for j in range(len(theta)):
         for i in range(len(r)):
-
+    
             jp = (j + 1) % len(theta) #so that way it wraps to zero when hit 360
             jm = (j - 1) % len(theta) #so when at j=0 wraps to 359--> for a%b learned python always returns a number between 0 and b-1-> asks what number could i add to a multiple to 360 to get -1 
 
@@ -179,6 +218,7 @@ for k in range(0,int(Time_Limit/dt)):
                 )
 
     temp = temp_new
+
 
 #make cartesian
 theta_plot = np.append(theta, 2*np.pi) #didnt include 2pi as unique point since = 0 so adding back to complete circle of tire 
