@@ -1,5 +1,5 @@
 '''
-Run a regular lap sim. Run simulate_endurance to run your simulation.
+Run a regular lap sim. Run simulate_laps to run your simulation.
 '''
 import numpy as np
 import lap_utils
@@ -392,19 +392,26 @@ def simulate_pack(pack_data):
     file_name = f"openloop_out.csv"
     transient_output.to_csv(file_name, sep=',', encoding='utf-8', index=False)
 
-pack = accumulator.Pack(accumulator.Molicel_Cell_21700)
-pack.pack(14, 3, 10)
+# Test to make sure functions work correctly
+def trial():
+    pack = accumulator.Pack(accumulator.Molicel_Cell_21700)
+    pack.pack(14, 3, 10)
 
-# total_time, total_energy_drain, output_df = simulate(pack)
+    # Single Lap
+    total_time, total_energy_drain, output_df = simulate(pack)
+    print(total_time, total_energy_drain)
+    output_df.to_csv("sims_logs/single_lap.csv")
 
-# print(total_time, total_energy_drain)
-# output_df.to_csv("sims_logs/single_lap.csv")
+    # Single Lap with adjusted pack data
+    total_time, total_energy_drain, output_df = simulate_pack([20, 5, 7])
+    print(total_time, total_energy_drain)
+    output_df.to_csv("sims_logs/alt_pack.csv")
 
-total_time, total_energy_drain, pack_failed, output_df = simulate_laps(pack, 22)
-
-print(total_time, total_energy_drain)
-
-output_df.to_csv("sims_logs/out_loop.csv")
+    # Multi Lap
+    pack.pack(14, 3, 10)
+    total_time, total_energy_drain, pack_failed, output_df = simulate_laps(pack, 22)
+    print(total_time, total_energy_drain)
+    output_df.to_csv("sims_logs/out_loop.csv")
 
 # RIT Actual
 # 4.903 kWh
