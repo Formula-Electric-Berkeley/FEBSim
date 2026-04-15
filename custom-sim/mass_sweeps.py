@@ -35,26 +35,38 @@ def simulate_event(track_type="Autocross", masses=[290 + 5 * i for i in range(7)
     elif track_type == "Endurance":
         points_df.to_csv('mass_sweeps_files/endurance--point_data.csv')
 
-    # Display laptime and energy drain graphs
+    # Display score, laptime, and energy drain graphs
+    fig, ax = plt.subplots(nrows = 1, ncols = 3, figsize=(18, 5.5))
+
+    fig.suptitle("Effect of Vehicular Mass Variations on Event Scores, Laptimes, and Energy Drain", fontsize=16)
+    plt.subplots_adjust(top=0.85)
+
     m, b = np.polyfit(masses, scores, 1)
 
-    fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize=(20, 8))
-
-    ax[0].scatter(masses, scores, color='blue', label="Points")
-    ax[0].plot(masses, np.array(masses) * m + b, color='red', linestyle='--', label="Least Squares")
-    ax[0].set(title="Scores vs. Mass",
-                xlabel="Mass (kg)",
-                ylabel="Score (pts)")
+    ax[0].scatter(masses, scores, color='black', label="Score per Mass")
+    ax[0].plot(masses, np.array(masses) * m + b, color='red', linestyle='--', label="Line of Best Fit")
+    ax[0].set(title=track_type + " Event: Point Scores per Mass, 290-320 kg",
+              xlabel="Vehicular Mass (kg)",
+              ylabel=track_type + " Score (pts)")
     ax[0].legend()
+
+    m, b = np.polyfit(masses, laptimes, 1)
+
+    ax[1].scatter(masses, laptimes, color='black', label="Laptime per Mass")
+    ax[1].plot(masses, np.array(masses) * m + b, color='red', linestyle='--', label="Line of Best Fit")
+    ax[1].set(title=track_type + " Event: Laptimes per Mass, 290-320 kg",
+              xlabel="Vehicular Mass (kg)",
+              ylabel=track_type + " Laptime (s)")
+    ax[1].legend()
 
     m, b = np.polyfit(masses, energy_drain, 1)
 
-    ax[1].scatter(masses, energy_drain, color='blue', label="Points")
-    ax[1].plot(masses, np.array(masses) * m + b, color='red', linestyle='--', label="Least Squares")
-    ax[1].set(title="Energy Drain vs. Mass",
-                xlabel="Mass (kg)",
-                ylabel="Energy Drain (kW)")
-    ax[1].legend()
+    ax[2].scatter(masses, energy_drain, color='black', label="Energy Drain per Mass")
+    ax[2].plot(masses, np.array(masses) * m + b, color='red', linestyle='--', label="Line of Best Fit")
+    ax[2].set(title=track_type + " Event: Energy Drain per Mass, 290-320 kg",
+              xlabel="Vehicular Mass (kg)",
+              ylabel="Vehicular Energy Drain (kWh)")
+    ax[2].legend()
 
     if track_type == "Autocross":
         plt.savefig('mass_sweeps_files/autocross--laptime_energy_plots.png')
