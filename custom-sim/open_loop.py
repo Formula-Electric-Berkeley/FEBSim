@@ -351,7 +351,7 @@ def simulate(pack):
     return laptime, energy_drain, transient_output
 
 # Simulate n laps of the currently loaded track
-def simulate_laps(pack, numLaps):
+def simulate_laps(pack, numLaps=22):
     laptime0, energistics0, output_df = simulate(pack)
 
     laptimes = [laptime0]
@@ -393,7 +393,7 @@ def simulate_pack(pack_data):
     transient_output.to_csv(file_name, sep=',', encoding='utf-8', index=False)
 
 # Test to make sure functions work correctly
-def trial():
+def sanity_check():
     pack = accumulator.Pack(accumulator.Molicel_Cell_21700)
     pack.pack(14, 3, 10)
 
@@ -408,7 +408,6 @@ def trial():
     output_df.to_csv("sims_logs/alt_pack.csv")
 
     # Multi Lap
-    pack.pack(14, 3, 10)
     total_time, total_energy_drain, pack_failed, output_df = simulate_laps(pack, 22)
     print(total_time, total_energy_drain)
     output_df.to_csv("sims_logs/out_loop.csv")

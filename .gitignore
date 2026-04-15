@@ -9,5 +9,7 @@ TireSim/fy_out/*/*
 TireSim/mz_out/*/*
 TireSim/camber_out/*/*
 
+custom-sim/mass_sweeps_files/endurance--point_data.csv
+
 .venv
 **/__pycache__
