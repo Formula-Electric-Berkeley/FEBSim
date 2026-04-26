@@ -1,11 +1,11 @@
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
+import seaborn as sns
+import pandas as pd
 import numpy as np
 
 events = ['Cost', 'Presentation', 'Design', 'Acceleration', 'Skid Pad', 'Autocross', 'Endurance', 'Efficiency']
-# events = list(reversed(events))
 
-# Top 10 teams : these have labels
+# Top 10 teams; these have labels
 labeled_teams = {
     'Oregon State':             [75.2, 18.9, 120.0,  84.0,  75.0, 120.3, 248.4, 48.7],
     'San Jose State':           [86.6, 63.4, 115.0,  71.5,  53.9, 119.9, 275.0,  0.0],
@@ -19,9 +19,6 @@ labeled_teams = {
     'Purdue':                   [86.4, 17.3, 105.0,  24.8,  54.7, 108.2, 140.5, 56.0],
 }
 
-# labeled_teams = {k : reversed(v) for (k, v) in labeled_teams.items()}
-
-# unlabeled taeams
 background_teams = [
     [78.8, 54.5, 125.0, 32.5, 74.8, 113.1,  23.0, 90.9],  # Cal Poly SLO
     [82.0, 60.1, 150.0, 75.4, 73.4, 123.7,   2.0,  0.0],  # Wisconsin
@@ -50,57 +47,76 @@ background_teams = [
     [84.1, 46.7,  95.0,  0.0,  0.0,   0.0,   0.0,  0.0],  # UCLA
 ]
 
-# background_teams = [reversed(bt) for bt in background_teams]
-
 sn5_goals = [85.0, 70.0, 120.0, 54.1, 32.67, 86.45, 129.05, 15.85]
 
-# sn5_goals = list(reversed(sn5_goals))
+def get_long_df(team_dict, list_of_lists, goals):
+    rows = []
+    
+    # Process Labeled Teams
+    for name, scores in team_dict.items():
+        cum_points = np.cumsum(scores)
+        for event, points in zip(events, cum_points):
+            rows.append({'Team': name, 'Event': event, 'Points': points, 'Type': 'Competitor'})
+            
+    # Process Background Teams
+    for i, scores in enumerate(list_of_lists):
+        cum_points = np.cumsum(scores)
+        for event, points in zip(events, cum_points):
+            rows.append({'Team': f'Background_{i}', 'Event': event, 'Points': points, 'Type': 'Competitor'})
+            
+    # Process Berkeley Goals
+    cum_goals = np.cumsum(goals)
+    for event, points in zip(events, cum_goals):
+        rows.append({'Team': 'UC Berkeley', 'Event': event, 'Points': points, 'Type': 'Goal'})
+        
+    return pd.DataFrame(rows)
 
-def cumulative(scores):
-    total = 0
-    cum = []
-    for s in scores:
-        total += s
-        cum.append(total)
-    return cum
+df = get_long_df(labeled_teams, background_teams, sn5_goals)
 
-colors = [
-    '#e63946', '#457b9d', '#2a9d8f', '#e9c46a', '#f4a261',
-    '#264653', '#a8dadc', '#6d6875', '#b5838d', '#52b788',
-]
+color_map = {
+    'Oregon State': '#e63946', 'San Jose State': '#457b9d', 
+    'Georgia Tech': '#2a9d8f', 'Ecole Polytechnique Mtl': '#e9c46a',
+    'Univ of Washington': '#f4a261', 'Univ of Pittsburgh': '#264653',
+    'Natl Univ of Singapore': '#a8dadc', 'RIT': '#6d6875', 
+    'MIT': '#b5838d', 'Purdue': '#52b788'
+}
 
-fig, ax = plt.subplots(figsize=(14, 8))
-fig.patch.set_facecolor('white')
-ax.set_facecolor('white')
+plt.figure(figsize=(14, 8))
 
-x = np.arange(len(events))
+# unlabeled schools
+df_background = df[~df['Team'].isin(color_map.keys()) & (df['Type'] == 'Competitor')]
+sns.stripplot(
+    data=df_background, x='Event', y='Points', 
+    color='#dddddd', alpha=0.9, jitter=0.1, size=8, zorder=1, label="Other Schools"
+)
 
-# unlabeled
-for scores in background_teams:
-    ax.plot(x, cumulative(scores), color='#cccccc', linewidth=1.0, alpha=0.6, zorder=1)
+# labeled schools
+df_top10 = df[df['Team'].isin(color_map.keys())]
+for team, team_color in color_map.items():
+    team_data = df_top10[df_top10['Team'] == team]
+    plt.scatter(
+        x=team_data['Event'], y=team_data['Points'], 
+        color=team_color, s=40, label=team, alpha=0.9, zorder=5
+    )
 
-# labeled
-for i, (team, scores) in enumerate(labeled_teams.items()):
-    ax.plot(x, cumulative(scores), color=colors[i], linewidth=1.8, label=team, alpha=0.6, zorder=2)
+# berkeley
+sns.pointplot(
+    data=df[df['Team'] == 'UC Berkeley'], 
+    x='Event', y='Points', 
+    color='#003262', markers='o', scale=1.5, linestyles='-', zorder=10, label="UC Berkeley (SN5 Goals)"
+)
+sns.scatterplot(data=df[df['Team'] == 'UC Berkeley'], x='Event', y='Points', color='#FDB515', s=80, zorder=11, edgecolors='#003262')
 
-# our goals
-ax.plot(x, cumulative(sn5_goals), color='#003262', linewidth=3.5,
-        linestyle='-', marker='o', markersize=7, markerfacecolor='#FDB515',
-        label='UC Berkeley (SN5 Goals)', zorder=10)
+# just to make the labels be in order
+handles, labels = plt.gca().get_legend_handles_labels()
+by_label = dict(zip(labels, handles))
+ordered_labels = ['UC Berkeley (SN5 Goals)'] + list(color_map.keys()) + ['Other Schools']
+ordered_handles = [by_label[label] for label in ordered_labels if label in by_label]
+plt.legend(ordered_handles, ordered_labels, bbox_to_anchor=(1.05, 1), loc='upper left', frameon=False)
 
-ax.set_xticks(x)
-ax.set_xticklabels(events, fontsize=13)
-ax.set_ylabel('Cumulative Points', fontsize=13)
-ax.set_title('Event Points by School (2025 Results, FEB 2026 Goals)', fontsize=16, pad=16, fontweight='bold')
-
-ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-ax.tick_params(axis='y', labelsize=12)
-ax.grid(axis='y', linestyle='--', linewidth=0.6, alpha=0.5)
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-
-ax.legend(loc='upper left', bbox_to_anchor=(1.01, 1), fontsize=11, frameon=False)
-
-plt.tight_layout()
+plt.title('Event Points by School (2025 Results, FEB 2026 Goals)', fontsize=16, fontweight='bold')
+plt.ylabel('Cumulative Points', fontsize=14)
+sns.despine()
+plt.subplots_adjust(right=0.75)
 plt.savefig('fsae_chart.png', dpi=180, bbox_inches='tight')
 plt.show()
