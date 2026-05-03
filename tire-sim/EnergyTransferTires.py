@@ -21,6 +21,11 @@ c_tire=1500 #J/kg K heat capcity of tire rubber
 c_rim=938 #J/kg K heat capcity
 alpha_tire=.1 *10**(-6) #thermal diffusivity of tire -> thermal diffusivity alpha= k/rho*c
 alpha_rim= 6 *10**(-5) #thermal diffusivity of rim 
+dyn_visc_air= 1.82 *(10**-5)
+alpha_air= 2 * (10**-5)
+Pr_air= dyn_visc_air/alpha_air
+Re_air= 0
+Tinf=20+273
 
 #clumped model heat anaylsis from brake pad to hub
 #units [=] W/mK
@@ -33,7 +38,7 @@ frac=(1/R_hub)/((1/R_hub)+(1/R_disc)+(1/R_pad))
 
 #Difrentials/ Mesh Sizing
 dr= 0.005 #m
-dt=.1 #s
+dt=.02 #s
 dtheta=np.deg2rad(20.0)
 
 #Meshing 
@@ -69,6 +74,8 @@ for i in range(len(r)):
          c[:,i]=c_tire
          rho[:,i]=rho_tire
 
+K=alpha*rho*c
+
 #time for sim
 Time_Limit=100 #sec
 Time=0 # sec
@@ -77,6 +84,9 @@ Time=0 # sec
 a_accel=9.81 #generic acceleration m/s^2
 a_decel=-9.81
 a=a_accel
+
+#coef friction for degradation
+coef_fric= .7
 
 v=np.zeros(int(Time_Limit/dt))
 
@@ -97,6 +107,31 @@ def heat_step(T, alpha, dt, r, dr, dtheta, TiP, TiM, TjP, TjM,rho,cp,qv):
 
     return T + dt * (alpha*(d2T_dr2 + (1/r)*dT_dr + (1/r**2)*d2T_dth2) + qv/(rho*cp))
 
+#Convection boundry heat step
+def heat_step_outer_conv(T, alpha, dt, r, dr, dtheta, TiM, TjP, TjM, rho, cp, qv, h, Tinf, k):
+    d2T_dth2 = (TjP - 2*T + TjM) / dtheta**2
+
+    return T + dt * (
+        alpha * (
+            2*(TiM - T)/dr**2
+            + 2*h/(k*dr) * (Tinf - T)
+            + (1/r**2) * d2T_dth2
+        )
+        + qv/(rho*cp)
+    )
+
+#Conduction with neighnbors bellow and next to for non convected points
+def heat_step_outer_adiabatic(T, alpha, dt, r, dr, dtheta, TiM, TjP, TjM, rho, cp, qv):
+    d2T_dth2 = (TjP - 2*T + TjM) / dtheta**2
+
+    return T + dt * (
+        alpha * (
+            2*(TiM - T)/dr**2
+            + (1/r**2) * d2T_dth2
+        )
+        + qv/(rho*cp)
+    )
+
 #r=0/center node special case heat equation
 heat_step0= lambda T,alpha,dt,dr,TiP: T+4*alpha*dt*((TiP-T)/(dr**2))
 
@@ -105,8 +140,13 @@ heat_step0= lambda T,alpha,dt,dr,TiP: T+4*alpha*dt*((TiP-T)/(dr**2))
 #setting heat gen spots / for rolling put 1 dr behind max radius and start at theta 270 degrees -> rotate clockwise
 q_gen=np.zeros(np.shape(MESH))
 
+patch_width=20
 rad1=268
-rad2=rad1+20
+rad2=rad1+patch_width
+
+conv_width=360/3
+rad1c=rad1-120
+rad2c=rad1c+conv_width
 
 #stability check before sim
 for l in range(1, len(r)):   # skip r=0
@@ -134,18 +174,29 @@ for k in range(0,int(Time_Limit/dt)):
     rad= omega*dt
     index_to_rotate=int(np.round(rad/dtheta))
     index_to_rotate=index_to_rotate%len(theta)
+
+    #for convection
+    D=((2/3)*np.pi)
+    Re=v[k]*D/dyn_visc_air
     
+    Pr=dyn_visc_air/alpha_air 
+    Nu = 0.3 + (0.62 * (Re**0.5) * (Pr**(1/3))) / ( (1 + (0.4/Pr)**(2/3))**0.25) * ((1 + (Re/282000)**(5/8))**(4/5))
+
+    k_air=.026
+
+    h= Nu*k_air/D
+
     #setting new heat gen spot
     q_gen[:,:]=0
 
     if a>0:
         if rad2 <= len(theta): #if within the 0-360 degrees rad2 aka no wrap around normal setting 
             q_gen[rad1:rad2,-5:-1]=qv(v[k])
-            print(qv(v[k]))
+    
         else: #for the case where rad1 is like 358 degrees so start there fill in to 360 and do the wrap around starting at 0 to wherever rad 2 ends
             q_gen[rad1:,-5:-1]=qv(v[k])
             q_gen[:rad2-len(theta),-5:-1]=qv(v[k])
-            print(qv(v[k]))
+
     else: #put brake pad between 45 degrees 2 dr away from center and use delta KE for heat energy 90% going to brake pad assuming even energy distribution to wheels 
             # total vehicle KE drop over this step
              dKE_total = max(0.0, 0.5 * M * (v[k]**2 - v[k+1]**2)) if (k+1) < len(v) else 0.0
@@ -173,8 +224,8 @@ for k in range(0,int(Time_Limit/dt)):
             # put it near outer radius and near contact patch
              q_gen[270:290,-2:-5]=Qdot_tread_slip/(r_heat*dtheta*w*60*dr)
 
-    rad1=index_to_rotate
-    rad2=rad1+3
+    rad1 = (rad1 + index_to_rotate) % len(theta)
+    rad2 = rad1 + patch_width
 
     temp_old = temp.copy() #holder for last cycle temp
     temp_new = temp_old.copy() #creating the holder for calculated temps
@@ -195,10 +246,44 @@ for k in range(0,int(Time_Limit/dt)):
                     temp_old[j,i+1]
                 )
 
-            elif i == len(r)-1:
-                # outer boundary (placeholder)--> dichlret boundry conditions
-                temp_new[j,i] = temp_old[j,i]
+            elif i == len(r)-1 :
+                # general convection over total tire ADD LATER ONLY 1/3 on top 
+                if rad1c<=j<=rad2c:
+                    temp_new[j,i] = heat_step_outer_conv(
+                        temp_old[j,i],
+                        alpha[j,i],
+                        dt,
+                        r[i],
+                        dr,
+                        dtheta,
+                        temp_old[j,i-1],
+                        temp_old[jp,i],
+                        temp_old[jm,i],
+                        rho[j,i],
+                        c[j,i],
+                        q_gen[j,i],
+                        h,
+                        Tinf,
+                        K[j,i]
+                        
+                    )
+                else:
+                    temp_new[j,i]= heat_step_outer_adiabatic(
+                        temp_old[j,i],
+                        alpha[j,i],
+                        dt,
+                        r[i],
+                        dr,
+                        dtheta,
+                        temp_old[j,i-1],
+                        temp_old[jp,i],
+                        temp_old[jm,i],
+                        rho[j,i],
+                        c[j,i],
+                        q_gen[j,i]
 
+                    )
+        
             else:
                 # interior nodes
                 temp_new[j,i] = heat_step(
@@ -216,6 +301,18 @@ for k in range(0,int(Time_Limit/dt)):
                     c[j,i],
                     q_gen[j,i]
                 )
+    rad1c= (rad1c + index_to_rotate) % len(theta)
+    rad2c= rad1c + conv_width
+
+    ### DEGRADATION AND COEF OF FRICTION DETERATION 
+
+
+    t_avg=np.sum(temp[:,-3:])/(np.shape(temp)[0]*3)
+
+    k= (1.6*10**5)*np.exp((-100*1000)/(8.314*t_avg))
+
+    coef_fric-=coef_fric*(k*dt) #using estimated values for arenious eq
+
 
     temp = temp_new
 
@@ -244,3 +341,5 @@ plt.title("Tire Temperature")
 plt.show()
 
 print(np.isnan(temp).any(), np.isinf(temp).any()) #sanity check 
+
+print(coef_fric)
