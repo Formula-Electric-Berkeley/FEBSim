@@ -189,6 +189,9 @@ for k in range(0,int(Time_Limit/dt)):
     #setting new heat gen spot
     q_gen[:,:]=0
 
+    #function for the percent to heating break from data analysis from tire data of braking (linear fitting)
+    p_br = lambda v: 1-(-5.16+ 2.89*v) #-> consider ML option for fitting data for both braking and turning
+
     if a>0:
         if rad2 <= len(theta): #if within the 0-360 degrees rad2 aka no wrap around normal setting 
             q_gen[rad1:rad2,-5:-1]=qv(v[k])
@@ -205,8 +208,8 @@ for k in range(0,int(Time_Limit/dt)):
              Qdot_wheel = 0.25 * dKE_total / dt
 
             # split braking power by mechanism
-             Qdot_hub_in = 0.9 * frac * Qdot_wheel     # conducted into inner rim/hub mesh region
-             Qdot_tread_slip = 0.1 * Qdot_wheel        # tread slip/friction heating
+             Qdot_hub_in = np.abs(p_br) * frac * Qdot_wheel     # conducted into inner rim/hub mesh region
+             Qdot_tread_slip = np.abs(1-p_br) * Qdot_wheel        # tread slip/friction heating
 
             #  inner hub/rim deposit region
              hub_i1, hub_i2 = 1, 3          # avoid i=0
