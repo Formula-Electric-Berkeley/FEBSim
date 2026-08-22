@@ -105,6 +105,7 @@ class KinematicsState:
 
 
 def build_kinematics_state(pts: Dict[str, Vec3]) -> KinematicsState:
+    """Given a dict of hardpoint positions, build the KinematicsState with lengths and offsets."""
     for k in REQUIRED_FOR_KINEMATICS:
         if k not in pts:
             raise ValueError(f"Missing required node: {k}")
@@ -129,6 +130,7 @@ def build_kinematics_state(pts: Dict[str, Vec3]) -> KinematicsState:
 
 
 def residual(x: np.ndarray, state: KinematicsState, dz: float) -> np.ndarray:
+    """Compute residuals for the kinematics constraints given current guess x."""
     LBJ = x[0:3]
     UBJ = x[3:6]
 
@@ -157,6 +159,7 @@ def residual(x: np.ndarray, state: KinematicsState, dz: float) -> np.ndarray:
 
 
 def solve_newton(state: KinematicsState, dz: float, x0: Optional[np.ndarray] = None) -> np.ndarray:
+    """Solve for LBJ/UBJ positions given bump dz using Newton's method."""
     if x0 is None:
         LBJ0 = state.pts0["LBJ"]
         UBJ0 = state.pts0["UBJ"]
@@ -210,6 +213,7 @@ def solve_newton(state: KinematicsState, dz: float, x0: Optional[np.ndarray] = N
 
 
 def apply_solution_to_points(pts: Dict[str, Vec3], state: KinematicsState, x: np.ndarray, dz: float) -> Dict[str, Vec3]:
+    """Given solution x for LBJ/UBJ, return new points dict with LBJ/UBJ updated and WC following rigidly."""
     out = {k: v.copy() for k, v in pts.items()}
     LBJ = x[0:3]
     UBJ = x[3:6]
@@ -228,6 +232,7 @@ def apply_solution_to_points(pts: Dict[str, Vec3], state: KinematicsState, x: np
 
 
 def compute_camber_deg(pts: Dict[str, Vec3]) -> float:
+    """Compute simple front-view camber angle in degrees from LBJ->UBJ vector."""
     # Simple front-view camber from LBJ->UBJ in y-z:
     # camber >0 means top outward? (sign conventions vary)
     # Here: in front view, vector v = UBJ-LBJ.

@@ -1,0 +1,84 @@
+{
+  "units": "m",
+  "coordinate_system": {
+    "x": "forward",
+    "y": "left",
+    "z": "up"
+  },
+  "params": {
+    "wheelbase_m": 1.55,
+    "track_m": 1.22,
+    "wheel_radius_m": 0.254,
+    "wheel_center_x_m": 0.35,
+    "wheel_center_z_m": 0.23,
+    "upright_height_m": 0.24,
+    "bj_inboard_m": 0.09,
+    "lbj_z_offset_m": -0.03,
+    "lbj_x_offset_m": 0.0,
+    "kpi_deg": 9.0,
+    "caster_deg": 6.0,
+    "lca_inboard_m": 0.28,
+    "uca_inboard_m": 0.25,
+    "lca_mid_x_offset_m": -0.02,
+    "uca_mid_x_offset_m": -0.03,
+    "lca_mid_z_m": 0.14,
+    "uca_mid_z_m": 0.34,
+    "lca_pivot_sep_m": 0.1,
+    "uca_pivot_sep_m": 0.09,
+    "pr_upright_dx_m": 0.02,
+    "pr_upright_dy_m": -0.03,
+    "pr_upright_dz_m": 0.02,
+    "pr_chassis_x_m": 0.1,
+    "pr_chassis_y_m": 0.18,
+    "pr_chassis_z_m": 0.1,
+    "min_link_length_m": 0.08,
+    "max_link_length_m": 0.8
+  },
+  "hardpoints": {
+    "WC": [
+      0.35,
+      0.61,
+      0.23
+    ],
+    "LBJ": [
+      0.35,
+      0.52,
+      0.2
+    ],
+    "UBJ": [
+      0.3247749835362376,
+      0.4819877343221113,
+      0.44
+    ],
+    "LCA_F": [
+      0.37999999999999995,
+      0.32999999999999996,
+      0.14
+    ],
+    "LCA_R": [
+      0.27999999999999997,
+      0.32999999999999996,
+      0.14
+    ],
+    "UCA_F": [
+      0.36499999999999994,
+      0.36,
+      0.34
+    ],
+    "UCA_R": [
+      0.27499999999999997,
+      0.36,
+      0.34
+    ],
+    "PR_U": [
+      0.37,
+      0.49,
+      0.22
+    ],
+    "PR_C": [
+      0.1,
+      0.18,
+      0.1
+    ]
+  }
+}
