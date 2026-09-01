@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
@@ -22,7 +23,7 @@ mode = 'shape data'
 mesh_size = 0.25 # [m]
 
 # Track excel file selection
-filename = 'track_files/Michigan_2021_Endurance.xlsx'
+filename = os.path.join('track_files', 'Michigan_2021_Endurance.xlsx')
 info = read_info(filename,'Shape')
 
 #Getting Curvature
@@ -120,8 +121,8 @@ def reload(trackfile, grip = 0):
     
     
     # Track excel file selection
-    base_name = 'track_files\\'
-    filename = base_name + trackfile
+    base_dir = 'track_files'
+    filename = os.path.join(base_dir, trackfile)
     info = read_info(filename,'Shape')
 
 

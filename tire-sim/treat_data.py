@@ -1,3 +1,16 @@
+"""
+treat_data.py
+
+Reads raw data and processes into more convenient format. Only use this
+if you have data in Run/RawData_* format. 
+
+Outputs:
+    SN5_R9_Lateral/runN.csv
+    SN5_R9_Lateral/info.yaml
+    SN5_R9_Longitudinal/runN.csv
+    SN5_R9_Longitudinal/info.yaml
+"""
+
 from collections import defaultdict
 import csv
 from datetime import datetime

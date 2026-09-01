@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -24,15 +25,14 @@ def fit_poly(df):
     # Return the fitting polynomial function
     return p
 
-# Load the data
-base_name = 'battery_info\\Molicell\\'
+# Load the data using os.path.join for cross‑platform compatibility
+base_dir = os.path.join('battery_info', 'Molicell')
 
-# Replace the string with the correct path if the CSV files are not in the same directory
-A84 = pd.read_csv(base_name+'0.84A.csv', header=None)
-A42 = pd.read_csv(base_name+'4.2A.csv', header=None)
-A10 = pd.read_csv(base_name+'10A.csv', header=None)
-A20 = pd.read_csv(base_name+'20A.csv', header=None)
-A30 = pd.read_csv(base_name+'30A.csv', header=None)
+A84 = pd.read_csv(os.path.join(base_dir, '0.84A.csv'), header=None)
+A42 = pd.read_csv(os.path.join(base_dir, '4.2A.csv'), header=None)
+A10 = pd.read_csv(os.path.join(base_dir, '10A.csv'), header=None)
+A20 = pd.read_csv(os.path.join(base_dir, '20A.csv'), header=None)
+A30 = pd.read_csv(os.path.join(base_dir, '30A.csv'), header=None)
 
 # Add headers
 A84.columns = ['X', 'Y']
