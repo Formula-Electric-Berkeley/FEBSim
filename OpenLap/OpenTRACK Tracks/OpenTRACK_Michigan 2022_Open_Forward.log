@@ -1,0 +1,29 @@
+_______                    ____________________________________ __
+__  __ \______________________  __/__  __ \__    |_  ____/__  //_/
+_  / / /__  __ \  _ \_  __ \_  /  __  /_/ /_  /| |  /    __  ,<   
+/ /_/ /__  /_/ /  __/  / / /  /   _  _, _/_  ___ / /___  _  /| |  
+\____/ _  .___/\___//_/ /_//_/    /_/ |_| /_/  |_\____/  /_/ |_|  
+       /_/                                                        
+==================================================================
+Michigan_2022_AutoX.xlsx
+File read successfully
+==================================================================
+Name:          Michigan 2022
+City:          Brooklyn
+Country:       US
+Type:          Permanent
+Configuration: Open
+Direction:     Forward
+Mirror:        Off
+Date:          03/01/2024
+Time:          17:54:46
+==================================================================
+Track generation started.
+Pre-processing completed.
+Coarse meshing completed.
+Fine meshing completed with mesh size: 0.25 [m]
+Apex calculation completed.
+Track rotated.
+Fine mesh map created.
+Plots created and saved.
+Track generated successfully.

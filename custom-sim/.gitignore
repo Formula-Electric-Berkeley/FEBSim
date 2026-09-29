@@ -1,7 +1,0 @@
-**/.venv/
-**/__pycache__/
-*.pyc
-*.log
-
-sims_logs/*
-openLoopOutputs/*
